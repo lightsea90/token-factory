@@ -188,6 +188,15 @@ impl TokenFactory {
             _ => false
         }
     }
+
+    pub fn reset(&mut self) {
+        assert!(env::state_exists(), "The contract is not initialized");
+        assert!(
+            env::current_account_id() == env::signer_account_id(), 
+            "Function called not from the contract owner itself",
+        );
+        self.tokens.clear();
+    }
 }
 
 #[near_bindgen]
@@ -445,6 +454,36 @@ impl TokenFactory {
             // .add_full_access_key(env::signer_account_pk())
             .transfer(3_000_000_000_000_000_000_000_000) // 3e24yN, 3N
         ;
+    }
+
+    pub fn list_my_tokens(&self, account_id: AccountId) -> Value {
+        assert!(env::state_exists(), "The contract is not initialized");
+
+        let token_list = self.tokens.keys_as_vector();
+        let mut result: Value = json!([]);
+
+        for token in token_list.iter() {
+            let state = self.tokens.get(&token).unwrap_or_default();
+            if state.creator.eq(&account_id) {
+                result.as_array_mut().unwrap().push(json!(state.ft_contract));
+            }
+        }
+
+        return result;
+    }
+
+    pub fn list_all_tokens(&self) -> Value {
+        assert!(env::state_exists(), "The contract is not initialized");
+
+        let token_list = self.tokens.keys_as_vector();
+        let mut result: Value = json!([]);
+
+        for token in token_list.iter() {
+            let state = self.tokens.get(&token).unwrap_or_default();
+            result.as_array_mut().unwrap().push(json!(state.ft_contract));
+        }
+
+        return result;
     }
 
     pub fn cross_call(msg: String) -> Promise {
