@@ -10,10 +10,10 @@ use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::serde::{Serialize, Deserialize};
 use near_sdk::serde_json::{json, Value};
 use near_sdk::{env, near_bindgen, ext_contract, PanicOnDefault};
-use near_sdk::collections::UnorderedMap;
+use near_sdk::collections::{UnorderedMap, Vector};
 use near_sdk::{AccountId, Balance, Timestamp, Duration, Gas};
 use near_sdk::{Promise, PromiseResult};
-use near_sdk::json_types::{U128, WrappedBalance, WrappedDuration, WrappedTimestamp};
+use near_sdk::json_types::{U128, WrappedBalance, WrappedDuration, WrappedTimestamp, Base64VecU8};
 
 use chrono::prelude::{Utc, DateTime};
 
@@ -32,7 +32,11 @@ pub struct State {
     total_supply: Balance,
     token_name: String,
     symbol: String,
+    icon: Option<String>,
+    reference: Option<String>,
+    reference_hash: Option<Base64VecU8>,
     decimals: u8,
+
 
     // creator and deployer
     ft_deployer: AccountId,
@@ -59,6 +63,9 @@ impl Default for State {
             total_supply: 0,
             token_name: String::from("__default_value__"),
             symbol: String::from("__default_value__"),
+            icon: Some(String::from("__default_value__")),
+            reference: None,
+            reference_hash: None,
             decimals: 0,
 
             ft_deployer: String::from("__default_value__"),
@@ -223,6 +230,9 @@ impl TokenFactory {
         total_supply: WrappedBalance,
         token_name: String,
         symbol: String,
+        icon: Option<String>,
+        reference: Option<String>,
+        reference_hash: Option<Base64VecU8>,
         decimals: u8,
         
         initial_release: WrappedBalance,
@@ -246,6 +256,9 @@ impl TokenFactory {
             total_supply: total_supply.into(),
             token_name: token_name,
             symbol: symbol,
+            icon: icon,
+            reference: reference,
+            reference_hash: reference_hash,
             decimals: decimals,
 
             ft_deployer: deployer_contract,
@@ -359,6 +372,9 @@ impl TokenFactory {
                         "spec": "ft-1.0.0",
                         "name": token.token_name,
                         "symbol": token.symbol,
+                        "icon": token.icon,
+                        "reference": token.reference,
+                        "reference_hash": token.reference,
                         "decimals": token.decimals,
                     }
                 }).to_string().as_bytes().to_vec(),
