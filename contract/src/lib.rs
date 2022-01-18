@@ -4,23 +4,18 @@ Functions:
  */
 
 
-extern crate chrono;
 // To conserve gas, efficient serialization is achieved through Borsh (http://borsh.io/)
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
-use near_sdk::serde::{Serialize, Deserialize};
 use near_sdk::serde_json::{json, Value};
 use near_sdk::{env, near_bindgen, ext_contract, PanicOnDefault};
-use near_sdk::collections::{UnorderedMap, Vector};
+use near_sdk::collections::UnorderedMap;
 use near_sdk::{AccountId, Balance, Timestamp, Duration, Gas};
 use near_sdk::{Promise, PromiseResult};
-use near_sdk::json_types::{U128, WrappedBalance, WrappedDuration, WrappedTimestamp, Base64VecU8};
-
-use chrono::prelude::{Utc, DateTime};
+use near_sdk::json_types::{WrappedBalance, WrappedDuration, WrappedTimestamp, Base64VecU8};
 
 near_sdk::setup_alloc!();
 
 const DEFAULT_GAS_FEE: Gas = 20_000_000_000_000;
-const NO_GAS_FEE: Gas = 0;
 const TOKENHUB_TREASURY: &str = "treasury.tokenhub.testnet";
 const FT_WASM_CODE: &[u8] = include_bytes!("../../out/fungible_token.wasm");
 const DEPLOYER_WASM_CODE: &[u8] = include_bytes!("../../out/token_deployer.wasm");
