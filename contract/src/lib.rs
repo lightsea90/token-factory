@@ -490,7 +490,32 @@ impl TokenFactory {
         for token in token_list.iter() {
             let state = self.tokens.get(&token).unwrap_or_default();
             if state.creator.eq(&account_id) {
-                result.as_array_mut().unwrap().push(json!(state.ft_contract));
+                // let e = json!({state.ft_contract});
+                let e = json!({
+                    "ft_contract": state.ft_contract,
+                    "total_supply": WrappedBalance::from(state.total_supply),
+                    "token_name": state.token_name,
+                    "symbol": state.symbol,
+                    "icon": state.icon,
+                    "reference": state.reference,
+                    "reference_hash": state.reference_hash,
+                    "decimals": state.decimals,
+        
+                    "ft_deployer": state.ft_deployer,
+                    "creator": state.creator,
+        
+                    "initial_release": WrappedBalance::from(state.initial_release),
+                    "vesting_start_time": WrappedTimestamp::from(state.vesting_start_time),
+                    "vesting_end_time": WrappedTimestamp::from(state.vesting_end_time),
+                    "vesting_interval": WrappedDuration::from(state.vesting_interval),
+                    "treasury_allocation": WrappedBalance::from(state.treasury_allocation),
+        
+                    "ft_contract_deployed": state.ft_contract_deployed,
+                    "deployer_contract_deployed": state.deployer_contract_deployed,
+                    "ft_issued": state.ft_issued,
+                    "allocation_initialized": state.allocation_initialized,
+                });
+                result.as_array_mut().unwrap().push(e);
             }
         }
 
@@ -505,10 +530,107 @@ impl TokenFactory {
 
         for token in token_list.iter() {
             let state = self.tokens.get(&token).unwrap_or_default();
-            result.as_array_mut().unwrap().push(json!(state.ft_contract));
+            let e = json!({
+                "ft_contract": state.ft_contract,
+                "total_supply": WrappedBalance::from(state.total_supply),
+                "token_name": state.token_name,
+                "symbol": state.symbol,
+                "icon": state.icon,
+                "reference": state.reference,
+                "reference_hash": state.reference_hash,
+                "decimals": state.decimals,
+    
+                "ft_deployer": state.ft_deployer,
+                "creator": state.creator,
+    
+                "initial_release": WrappedBalance::from(state.initial_release),
+                "vesting_start_time": WrappedTimestamp::from(state.vesting_start_time),
+                "vesting_end_time": WrappedTimestamp::from(state.vesting_end_time),
+                "vesting_interval": WrappedDuration::from(state.vesting_interval),
+                "treasury_allocation": WrappedBalance::from(state.treasury_allocation),
+    
+                "ft_contract_deployed": state.ft_contract_deployed,
+                "deployer_contract_deployed": state.deployer_contract_deployed,
+                "ft_issued": state.ft_issued,
+                "allocation_initialized": state.allocation_initialized,
+            });
+            result.as_array_mut().unwrap().push(e);
         }
 
         return result;
+    }
+
+    pub fn list_all_token_contracts(self) -> Value {
+        assert!(env::state_exists(), "The contract is not initialized");
+
+        let token_list = self.tokens.keys_as_vector();
+        let mut result: Value = json!([]);
+
+        for token in token_list.iter() {
+            result.as_array_mut().unwrap().push(json!(token));
+        }
+        return result;
+    }
+
+    pub fn list_token_states(&self, token_contracts: Vec<AccountId>) -> Value {
+        assert!(env::state_exists(), "The contract is not initialized");
+        let mut result: Value = json!([]);
+        for token in token_contracts.iter() {
+            let state = self.tokens.get(&token).unwrap_or_default();
+            assert!(
+                state.vesting_end_time != 0 && state.total_supply != 0,
+                "Token is not registered",
+            );
+            result.as_array_mut().unwrap().push(json!({
+                "ft_contract": state.ft_contract,
+                "total_supply": WrappedBalance::from(state.total_supply),
+                "token_name": state.token_name,
+                "symbol": state.symbol,
+                "icon": state.icon,
+                "reference": state.reference,
+                "reference_hash": state.reference_hash,
+                "decimals": state.decimals,
+    
+                "ft_deployer": state.ft_deployer,
+                "creator": state.creator,
+    
+                "initial_release": WrappedBalance::from(state.initial_release),
+                "vesting_start_time": WrappedTimestamp::from(state.vesting_start_time),
+                "vesting_end_time": WrappedTimestamp::from(state.vesting_end_time),
+                "vesting_interval": WrappedDuration::from(state.vesting_interval),
+                "treasury_allocation": WrappedBalance::from(state.treasury_allocation),
+    
+                "ft_contract_deployed": state.ft_contract_deployed,
+                "deployer_contract_deployed": state.deployer_contract_deployed,
+                "ft_issued": state.ft_issued,
+                "allocation_initialized": state.allocation_initialized,
+            }));
+        }
+        return result;
+    }
+
+    pub fn log_all_tokens(&mut self) {
+        assert!(env::state_exists(), "The contract is not initialized");
+
+        let token_list = self.tokens.keys_as_vector();
+        let mut result: Value = json!([]);
+        let mut count: u32 = 0;
+        let mut logstr: String = String::from("");
+
+        for token in token_list.iter() {
+            let state = self.tokens.get(&token).unwrap_or_default();
+            logstr = format!("{} | creator = {} ; ft_contract = {}", logstr, state.creator, state.ft_contract);
+            count += 1;
+            if count % 50 == 0 {
+                env::log(logstr.as_bytes());
+                logstr = String::from("");
+            }
+        }
+
+        env::log(
+            format!("count = {}", count)
+            .as_bytes()
+        );
     }
 
     pub fn cross_call(msg: String) -> Promise {
