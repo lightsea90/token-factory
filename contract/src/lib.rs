@@ -37,7 +37,6 @@ pub struct State {
     reference_hash: Option<Base64VecU8>,
     decimals: u8,
 
-
     // creator and deployer
     ft_deployer: AccountId,
     creator: AccountId,
@@ -473,14 +472,6 @@ impl TokenFactory {
         });
     }
 
-    pub fn create_account(account_id: AccountId) -> Promise {
-        return Promise::new(account_id.parse().unwrap())
-            .create_account()
-            // .add_full_access_key(env::signer_account_pk())
-            .transfer(3_000_000_000_000_000_000_000_000) // 3e24yN, 3N
-        ;
-    }
-
     pub fn list_my_tokens(&self, account_id: AccountId) -> Value {
         assert!(env::state_exists(), "The contract is not initialized");
 
@@ -607,41 +598,6 @@ impl TokenFactory {
             }));
         }
         return result;
-    }
-
-    pub fn log_all_tokens(&mut self) {
-        assert!(env::state_exists(), "The contract is not initialized");
-
-        let token_list = self.tokens.keys_as_vector();
-        let mut result: Value = json!([]);
-        let mut count: u32 = 0;
-        let mut logstr: String = String::from("");
-
-        for token in token_list.iter() {
-            let state = self.tokens.get(&token).unwrap_or_default();
-            logstr = format!("{} | creator = {} ; ft_contract = {}", logstr, state.creator, state.ft_contract);
-            count += 1;
-            if count % 50 == 0 {
-                env::log(logstr.as_bytes());
-                logstr = String::from("");
-            }
-        }
-
-        env::log(
-            format!("count = {}", count)
-            .as_bytes()
-        );
-    }
-
-    pub fn cross_call(msg: String) -> Promise {
-        return Promise::new("dev-1636887864030-99052494264010".parse().unwrap())
-        .function_call(
-            b"test".to_vec(),
-            json!({
-                "msg": msg
-            }).to_string().as_bytes().to_vec(),
-            0, DEFAULT_GAS_FEE,
-        );
     }
 
 }
