@@ -17,8 +17,8 @@ near_sdk::setup_alloc!();
 
 const DEFAULT_GAS_FEE: Gas = 20_000_000_000_000;
 const TOKENHUB_TREASURY: &str = "treasury.tokenhub.testnet";
-const FT_WASM_CODE: &[u8] = include_bytes!("../../out/fungible_token.wasm");
-const DEPLOYER_WASM_CODE: &[u8] = include_bytes!("../../out/token_deployer.wasm");
+const FT_WASM_CODE: &[u8] = include_bytes!("../../static/fungible_token.wasm");
+const DEPLOYER_WASM_CODE: &[u8] = include_bytes!("../../static/token_deployer.wasm");
 
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct State {
