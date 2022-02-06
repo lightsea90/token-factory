@@ -1,5 +1,5 @@
 [package]
-name = "token_sale"
+name = "token_factory"
 version = "0.0.1"
 authors = ["Hai Minh Nguyen"]
 edition = "2018"
@@ -10,7 +10,6 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 near-sdk = "3.1.0"
 near-contract-standards = "3.1.1"
-chrono = "0.4"
 
 [profile.release]
 codegen-units = 1

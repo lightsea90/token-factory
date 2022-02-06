@@ -4,26 +4,27 @@ Functions:
  */
 
 
-extern crate chrono;
 // To conserve gas, efficient serialization is achieved through Borsh (http://borsh.io/)
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
-use near_sdk::serde::{Serialize, Deserialize};
 use near_sdk::serde_json::{json, Value};
-use near_sdk::{env, near_bindgen, ext_contract, PanicOnDefault};
-use near_sdk::collections::{UnorderedMap, Vector};
+use near_sdk::{env, near_bindgen, PanicOnDefault};
+use near_sdk::collections::UnorderedMap;
 use near_sdk::{AccountId, Balance, Timestamp, Duration, Gas};
 use near_sdk::{Promise, PromiseResult};
-use near_sdk::json_types::{U128, WrappedBalance, WrappedDuration, WrappedTimestamp, Base64VecU8};
+use near_sdk::json_types::{WrappedBalance, WrappedDuration, WrappedTimestamp, Base64VecU8};
 
-use chrono::prelude::{Utc, DateTime};
+use crate::callbacks::ext_self;
+
+mod callbacks;
+mod views;
+mod admins;
 
 near_sdk::setup_alloc!();
 
 const DEFAULT_GAS_FEE: Gas = 20_000_000_000_000;
-const NO_GAS_FEE: Gas = 0;
 const TOKENHUB_TREASURY: &str = "treasury.tokenhub.testnet";
-const FT_WASM_CODE: &[u8] = include_bytes!("../../out/fungible_token.wasm");
-const DEPLOYER_WASM_CODE: &[u8] = include_bytes!("../../out/token_deployer.wasm");
+const FT_WASM_CODE: &[u8] = include_bytes!("../../static/fungible_token.wasm");
+const DEPLOYER_WASM_CODE: &[u8] = include_bytes!("../../static/token_deployer.wasm");
 
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct State {
@@ -36,7 +37,6 @@ pub struct State {
     reference: Option<String>,
     reference_hash: Option<Base64VecU8>,
     decimals: u8,
-
 
     // creator and deployer
     ft_deployer: AccountId,
@@ -82,136 +82,6 @@ impl Default for State {
             ft_issued: 0,
             allocation_initialized: 0,
         }
-    }
-}
-
-#[ext_contract(ext_self)]
-pub trait ExtTokenFactory {
-    fn on_ft_contract_deployed(&mut self, ft_contract: AccountId) -> bool;
-    fn on_ft_deployer_deployed(&mut self, ft_contract: AccountId) -> bool;
-    fn on_token_issued(&mut self, ft_contract: AccountId) -> bool;
-    fn on_allocation_init(&mut self, ft_contract: AccountId) -> bool;
-}
-
-#[near_bindgen]
-impl TokenFactory {
-    #[private]
-    pub fn on_ft_contract_deployed(&mut self, ft_contract: AccountId) -> bool {
-        env::log(
-            format!("promise_result_count = {}", env::promise_results_count())
-            .as_bytes()
-        );
-        match env::promise_result(0) {
-            PromiseResult::Successful(_) => {
-                let mut token = self.tokens.remove(&ft_contract).unwrap_or_default();
-                assert!(
-                    token.vesting_end_time != 0 && token.total_supply != 0,
-                    "Token is not registered",
-                );
-                assert!(
-                    token.ft_contract_deployed == 0,
-                    "State ft_contract_deployed is invalid",
-                );
-                token.ft_contract_deployed = 1;
-                self.tokens.insert(&ft_contract, &token);
-                true
-            },
-            _ => false
-        }
-    }
-
-    #[private]
-    pub fn on_ft_deployer_deployed(&mut self, ft_contract: AccountId) -> bool {
-        env::log(
-            format!("promise_result_count = {}", env::promise_results_count())
-            .as_bytes()
-        );
-        // format!("fasfas");
-        match env::promise_result(0) {
-            PromiseResult::Successful(_) => {
-                let mut token = self.tokens.remove(&ft_contract).unwrap_or_default();
-                assert!(
-                    token.vesting_end_time != 0 && token.total_supply != 0,
-                    "Token is not registered",
-                );
-                assert!(
-                    token.deployer_contract_deployed == 0,
-                    "State deployer_contract_deployed is invalid",
-                );
-                token.deployer_contract_deployed = 1;
-                self.tokens.insert(&ft_contract, &token);
-                true
-            },
-            _ => false
-        }
-    }
-
-    #[private]
-    pub fn on_token_issued(&mut self, ft_contract: AccountId) -> bool {
-        env::log(
-            format!("promise_result_count = {}", env::promise_results_count())
-            .as_bytes()
-        );
-        match env::promise_result(0) {
-            PromiseResult::Successful(_) => {
-                let mut token = self.tokens.remove(&ft_contract).unwrap_or_default();
-                assert!(
-                    token.vesting_end_time != 0 && token.total_supply != 0,
-                    "Token is not registered",
-                );
-                assert!(
-                    token.ft_issued == 0,
-                    "State ft_issued is invalid",
-                );
-                token.ft_issued = 1;
-                self.tokens.insert(&ft_contract, &token);
-                true
-            },
-            _ => false
-        }
-    }
-
-    #[private]
-    pub fn on_allocation_init(&mut self, ft_contract: AccountId) -> bool {
-        env::log(
-            format!("promise_result_count = {}", env::promise_results_count())
-            .as_bytes()
-        );
-        match env::promise_result(0) {
-            PromiseResult::Successful(_) => {
-                let mut token = self.tokens.remove(&ft_contract).unwrap_or_default();
-                assert!(
-                    token.vesting_end_time != 0 && token.total_supply != 0,
-                    "Token is not registered",
-                );
-                assert!(
-                    token.allocation_initialized == 0,
-                    "State allocation_initialized is invalid",
-                );
-                token.allocation_initialized = 1;
-                self.tokens.insert(&ft_contract, &token);
-                true
-            },
-            _ => false
-        }
-    }
-
-    pub fn reset(&mut self) {
-        assert!(env::state_exists(), "The contract is not initialized");
-        assert!(
-            env::current_account_id() == env::signer_account_id(), 
-            "Function called not from the contract owner itself",
-        );
-        self.tokens.clear();
-    }
-
-    pub fn unregister(&mut self, ft_contract: AccountId) {
-        assert!(env::state_exists(), "The contract is not initialized");
-        assert!(
-            env::current_account_id() == env::signer_account_id(), 
-            "Function called not from the contract owner itself",
-        );
-        self.tokens.remove(&ft_contract);
     }
 }
 
@@ -442,206 +312,6 @@ impl TokenFactory {
                     0, DEFAULT_GAS_FEE,
                 )
             );
-    }
-
-    pub fn get_token_state(self, ft_contract: AccountId) -> Value {
-        let token = self.tokens.get(&ft_contract).unwrap_or_default();
-        assert!(
-            token.vesting_end_time != 0 && token.total_supply != 0,
-            "Token is not registered",
-        );
-        return json!({
-            "ft_contract": token.ft_contract,
-            "total_supply": WrappedBalance::from(token.total_supply),
-            "token_name": token.token_name,
-            "symbol": token.symbol,
-            "decimals": token.decimals,
-
-            "ft_deployer": token.ft_deployer,
-            "creator": token.creator,
-
-            "initial_release": WrappedBalance::from(token.initial_release),
-            "vesting_start_time": WrappedTimestamp::from(token.vesting_start_time),
-            "vesting_end_time": WrappedTimestamp::from(token.vesting_end_time),
-            "vesting_interval": WrappedDuration::from(token.vesting_interval),
-            "treasury_allocation": WrappedBalance::from(token.treasury_allocation),
-
-            "ft_contract_deployed": token.ft_contract_deployed,
-            "deployer_contract_deployed": token.deployer_contract_deployed,
-            "ft_issued": token.ft_issued,
-            "allocation_initialized": token.allocation_initialized,
-        });
-    }
-
-    pub fn create_account(account_id: AccountId) -> Promise {
-        return Promise::new(account_id.parse().unwrap())
-            .create_account()
-            // .add_full_access_key(env::signer_account_pk())
-            .transfer(3_000_000_000_000_000_000_000_000) // 3e24yN, 3N
-        ;
-    }
-
-    pub fn list_my_tokens(&self, account_id: AccountId) -> Value {
-        assert!(env::state_exists(), "The contract is not initialized");
-
-        let token_list = self.tokens.keys_as_vector();
-        let mut result: Value = json!([]);
-
-        for token in token_list.iter() {
-            let state = self.tokens.get(&token).unwrap_or_default();
-            if state.creator.eq(&account_id) {
-                // let e = json!({state.ft_contract});
-                let e = json!({
-                    "ft_contract": state.ft_contract,
-                    "total_supply": WrappedBalance::from(state.total_supply),
-                    "token_name": state.token_name,
-                    "symbol": state.symbol,
-                    "icon": state.icon,
-                    "reference": state.reference,
-                    "reference_hash": state.reference_hash,
-                    "decimals": state.decimals,
-        
-                    "ft_deployer": state.ft_deployer,
-                    "creator": state.creator,
-        
-                    "initial_release": WrappedBalance::from(state.initial_release),
-                    "vesting_start_time": WrappedTimestamp::from(state.vesting_start_time),
-                    "vesting_end_time": WrappedTimestamp::from(state.vesting_end_time),
-                    "vesting_interval": WrappedDuration::from(state.vesting_interval),
-                    "treasury_allocation": WrappedBalance::from(state.treasury_allocation),
-        
-                    "ft_contract_deployed": state.ft_contract_deployed,
-                    "deployer_contract_deployed": state.deployer_contract_deployed,
-                    "ft_issued": state.ft_issued,
-                    "allocation_initialized": state.allocation_initialized,
-                });
-                result.as_array_mut().unwrap().push(e);
-            }
-        }
-
-        return result;
-    }
-
-    pub fn list_all_tokens(&self) -> Value {
-        assert!(env::state_exists(), "The contract is not initialized");
-
-        let token_list = self.tokens.keys_as_vector();
-        let mut result: Value = json!([]);
-
-        for token in token_list.iter() {
-            let state = self.tokens.get(&token).unwrap_or_default();
-            let e = json!({
-                "ft_contract": state.ft_contract,
-                "total_supply": WrappedBalance::from(state.total_supply),
-                "token_name": state.token_name,
-                "symbol": state.symbol,
-                "icon": state.icon,
-                "reference": state.reference,
-                "reference_hash": state.reference_hash,
-                "decimals": state.decimals,
-    
-                "ft_deployer": state.ft_deployer,
-                "creator": state.creator,
-    
-                "initial_release": WrappedBalance::from(state.initial_release),
-                "vesting_start_time": WrappedTimestamp::from(state.vesting_start_time),
-                "vesting_end_time": WrappedTimestamp::from(state.vesting_end_time),
-                "vesting_interval": WrappedDuration::from(state.vesting_interval),
-                "treasury_allocation": WrappedBalance::from(state.treasury_allocation),
-    
-                "ft_contract_deployed": state.ft_contract_deployed,
-                "deployer_contract_deployed": state.deployer_contract_deployed,
-                "ft_issued": state.ft_issued,
-                "allocation_initialized": state.allocation_initialized,
-            });
-            result.as_array_mut().unwrap().push(e);
-        }
-
-        return result;
-    }
-
-    pub fn list_all_token_contracts(self) -> Value {
-        assert!(env::state_exists(), "The contract is not initialized");
-
-        let token_list = self.tokens.keys_as_vector();
-        let mut result: Value = json!([]);
-
-        for token in token_list.iter() {
-            result.as_array_mut().unwrap().push(json!(token));
-        }
-        return result;
-    }
-
-    pub fn list_token_states(&self, token_contracts: Vec<AccountId>) -> Value {
-        assert!(env::state_exists(), "The contract is not initialized");
-        let mut result: Value = json!([]);
-        for token in token_contracts.iter() {
-            let state = self.tokens.get(&token).unwrap_or_default();
-            assert!(
-                state.vesting_end_time != 0 && state.total_supply != 0,
-                "Token is not registered",
-            );
-            result.as_array_mut().unwrap().push(json!({
-                "ft_contract": state.ft_contract,
-                "total_supply": WrappedBalance::from(state.total_supply),
-                "token_name": state.token_name,
-                "symbol": state.symbol,
-                "icon": state.icon,
-                "reference": state.reference,
-                "reference_hash": state.reference_hash,
-                "decimals": state.decimals,
-    
-                "ft_deployer": state.ft_deployer,
-                "creator": state.creator,
-    
-                "initial_release": WrappedBalance::from(state.initial_release),
-                "vesting_start_time": WrappedTimestamp::from(state.vesting_start_time),
-                "vesting_end_time": WrappedTimestamp::from(state.vesting_end_time),
-                "vesting_interval": WrappedDuration::from(state.vesting_interval),
-                "treasury_allocation": WrappedBalance::from(state.treasury_allocation),
-    
-                "ft_contract_deployed": state.ft_contract_deployed,
-                "deployer_contract_deployed": state.deployer_contract_deployed,
-                "ft_issued": state.ft_issued,
-                "allocation_initialized": state.allocation_initialized,
-            }));
-        }
-        return result;
-    }
-
-    pub fn log_all_tokens(&mut self) {
-        assert!(env::state_exists(), "The contract is not initialized");
-
-        let token_list = self.tokens.keys_as_vector();
-        let mut result: Value = json!([]);
-        let mut count: u32 = 0;
-        let mut logstr: String = String::from("");
-
-        for token in token_list.iter() {
-            let state = self.tokens.get(&token).unwrap_or_default();
-            logstr = format!("{} | creator = {} ; ft_contract = {}", logstr, state.creator, state.ft_contract);
-            count += 1;
-            if count % 50 == 0 {
-                env::log(logstr.as_bytes());
-                logstr = String::from("");
-            }
-        }
-
-        env::log(
-            format!("count = {}", count)
-            .as_bytes()
-        );
-    }
-
-    pub fn cross_call(msg: String) -> Promise {
-        return Promise::new("dev-1636887864030-99052494264010".parse().unwrap())
-        .function_call(
-            b"test".to_vec(),
-            json!({
-                "msg": msg
-            }).to_string().as_bytes().to_vec(),
-            0, DEFAULT_GAS_FEE,
-        );
     }
 
 }
