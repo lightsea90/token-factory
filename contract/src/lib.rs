@@ -3,21 +3,22 @@ Functions:
 
  */
 
-
 // To conserve gas, efficient serialization is achieved through Borsh (http://borsh.io/)
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
+use near_sdk::collections::UnorderedMap;
+use near_sdk::json_types::{Base64VecU8, WrappedBalance, WrappedDuration, WrappedTimestamp};
 use near_sdk::serde_json::{json, Value};
 use near_sdk::{env, near_bindgen, PanicOnDefault};
-use near_sdk::collections::UnorderedMap;
-use near_sdk::{AccountId, Balance, Timestamp, Duration, Gas};
+use near_sdk::{AccountId, Balance, Duration, Gas, Timestamp};
 use near_sdk::{Promise, PromiseResult};
-use near_sdk::json_types::{WrappedBalance, WrappedDuration, WrappedTimestamp, Base64VecU8};
+use near_sdk::serde::{Serialize, Deserialize};
+use std::collections::HashMap;
 
 use crate::callbacks::ext_self;
 
+mod admins;
 mod callbacks;
 mod views;
-mod admins;
 
 near_sdk::setup_alloc!();
 
@@ -26,28 +27,47 @@ const TOKENHUB_TREASURY: &str = "treasury.tokenhub.testnet";
 const FT_WASM_CODE: &[u8] = include_bytes!("../../static/fungible_token.wasm");
 const DEPLOYER_WASM_CODE: &[u8] = include_bytes!("../../static/token_deployer.wasm");
 
+pub type TokenAllocationInput = HashMap<AccountId, WrappedTokenAllocation>;
+
+#[derive(BorshDeserialize, BorshSerialize, Clone, Deserialize, Serialize)]
+#[serde(crate = "near_sdk::serde")]
+pub struct WrappedTokenAllocation {
+    allocated_num: WrappedBalance,
+    initial_release: WrappedBalance,
+    vesting_start_time: WrappedTimestamp,
+    vesting_end_time: WrappedTimestamp,
+    vesting_interval: WrappedDuration,
+}
+
+#[derive(BorshDeserialize, BorshSerialize, Clone, Deserialize, Serialize)]
+#[serde(crate = "near_sdk::serde")]
+pub struct TokenAllocation {
+    allocated_num: Balance,
+    initial_release: Balance,
+    vesting_start_time: Timestamp,
+    vesting_end_time: Timestamp,
+    vesting_interval: Duration,
+    claimed: Balance,
+}
+
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct State {
     // token info
     ft_contract: AccountId,
-    total_supply: Balance,
-    token_name: String,
-    symbol: String,
+    total_supply: Option<Balance>,
+    token_name: Option<String>,
+    symbol: Option<String>,
     icon: Option<String>,
     reference: Option<String>,
     reference_hash: Option<Base64VecU8>,
-    decimals: u8,
+    decimals: Option<u8>,
 
     // creator and deployer
     ft_deployer: AccountId,
     creator: AccountId,
 
-    // tokenomics
-    initial_release: Balance,
-    vesting_start_time: Timestamp,
-    vesting_end_time: Timestamp,
-    vesting_interval: Duration,
-    treasury_allocation: Balance,
+    // Multiple tokenomics
+    allocations: UnorderedMap<AccountId, TokenAllocation>,
 
     // issuance states
     ft_contract_deployed: u8,
@@ -58,24 +78,21 @@ pub struct State {
 
 impl Default for State {
     fn default() -> Self {
+        let default_string_value = String::from("__default_value__");
         Self {
-            ft_contract: String::from("__default_value__"),
-            total_supply: 0,
-            token_name: String::from("__default_value__"),
-            symbol: String::from("__default_value__"),
-            icon: Some(String::from("__default_value__")),
+            ft_contract: default_string_value.clone(),
+            total_supply: Some(0),
+            token_name: Some(default_string_value.clone()),
+            symbol: Some(default_string_value.clone()),
+            icon: Some(default_string_value.clone()),
             reference: None,
             reference_hash: None,
-            decimals: 0,
+            decimals: Some(0),
 
-            ft_deployer: String::from("__default_value__"),
-            creator: String::from("__default_value__"),
+            ft_deployer: default_string_value.clone(),
+            creator: default_string_value.clone(),
 
-            initial_release: 0,
-            vesting_start_time: 0,
-            vesting_end_time: 0,
-            vesting_interval: 0,
-            treasury_allocation: 0,
+            allocations: UnorderedMap::new(b"tokennomics".to_vec()),
 
             ft_contract_deployed: 0,
             deployer_contract_deployed: 0,
@@ -93,7 +110,6 @@ pub struct TokenFactory {
 
 #[near_bindgen]
 impl TokenFactory {
-
     #[init]
     pub fn new() -> Self {
         return Self {
@@ -104,7 +120,7 @@ impl TokenFactory {
     #[payable]
     pub fn register(
         &mut self,
-        ft_contract: AccountId, 
+        ft_contract: AccountId,
         deployer_contract: AccountId,
         total_supply: WrappedBalance,
         token_name: String,
@@ -112,43 +128,57 @@ impl TokenFactory {
         icon: Option<String>,
         reference: Option<String>,
         reference_hash: Option<Base64VecU8>,
+        allocations: TokenAllocationInput,
         decimals: u8,
-        
-        initial_release: WrappedBalance,
-        vesting_start_time: WrappedTimestamp,
-        vesting_end_time: WrappedTimestamp,
-        vesting_interval: WrappedDuration,
-        treasury_allocation: WrappedBalance,
     ) {
-        let mut token: State = self.tokens.get(&ft_contract).unwrap_or_default();
         assert!(
             env::attached_deposit() >= 4_000_000_000_000_000_000_000_000,
             "Minimum deposit is 4 NEAR",
         );
-        assert!(
-            token.vesting_end_time == 0 && token.total_supply == 0,
-            "Token is already registered",
-        );
+        // assert!(
+        //     token.vesting_end_time == 0 && token.total_supply == Some(0),
+        //     "Token is already registered",
+        // );
+        
+        let mut state_allocations = UnorderedMap::new(b"allocations".to_vec());
+
+        for (account_id, alloc) in &allocations {
+            let a = TokenAllocation {
+                allocated_num: alloc.allocated_num.into(),
+                initial_release: alloc.initial_release.into(),
+                vesting_start_time: alloc.vesting_start_time.into(),
+                vesting_end_time: alloc.vesting_end_time.into(),
+                vesting_interval: alloc.vesting_interval.into(),
+                claimed: 0,
+            };
+            assert!(
+                a.allocated_num >= a.initial_release + a.claimed,
+                "Allocation is smaller than the total claimable",
+            );
+            assert!(
+                a.vesting_interval <= a.vesting_end_time - a.vesting_start_time,
+                "Vesting interval is larger than vesting time",
+            );
+            state_allocations.insert(account_id, &a);
+        }
+        
+        let mut token: State = self.tokens.get(&ft_contract).unwrap_or_default();
 
         token = State {
             ft_contract: ft_contract.clone(),
-            total_supply: total_supply.into(),
-            token_name: token_name,
-            symbol: symbol,
-            icon: icon,
-            reference: reference,
-            reference_hash: reference_hash,
-            decimals: decimals,
+            total_supply: Some(total_supply.into()),
+            token_name: Some(token_name),
+            symbol: Some(symbol),
+            icon,
+            reference,
+            reference_hash,
+            decimals: Some(decimals),
 
             ft_deployer: deployer_contract,
             creator: env::signer_account_id(),
 
-            initial_release: initial_release.into(),
-            vesting_start_time: vesting_start_time.into(),
-            vesting_end_time: vesting_end_time.into(),
-            vesting_interval: vesting_interval.into(),
-            treasury_allocation: treasury_allocation.into(),
-            
+            allocations: state_allocations, 
+
             ft_contract_deployed: 0,
             deployer_contract_deployed: 0,
             ft_issued: 0,
@@ -156,7 +186,7 @@ impl TokenFactory {
         };
 
         assert!(
-            token.total_supply > 0,
+            token.total_supply > Some(0),
             "total_supply must be greater than 0",
         );
         // assert!(
@@ -167,14 +197,14 @@ impl TokenFactory {
         //     !env::is_valid_account_id(token.ft_deployer.as_bytes()),
         //     "ft_deployer already existed",
         // );
-        assert!(
-            token.vesting_interval <= token.vesting_end_time - token.vesting_start_time,
-            "Vesting interval is larger than vesting time",
-        );
-        assert!(
-            token.initial_release + token.treasury_allocation <= token.total_supply,
-            "Total allocation is more than total supply",
-        );
+        // assert!(
+        //     token.vesting_interval <= token.vesting_end_time - token.vesting_start_time,
+        //     "Vesting interval is larger than vesting time",
+        // );
+        // assert!(
+        //     token.initial_release + token.treasury_allocation <= token.total_supply.unwrap_or(0),
+        //     "Total allocation is more than total supply",
+        // );
         // TODO: validate more?
 
         self.tokens.insert(&ft_contract, &token);
@@ -182,10 +212,10 @@ impl TokenFactory {
 
     pub fn create_ft_contract(&mut self, ft_contract: AccountId) -> Promise {
         let token = self.tokens.get(&ft_contract).unwrap_or_default();
-        assert!(
-            token.vesting_end_time != 0 && token.total_supply != 0,
-            "Token is not registered",
-        );
+        // assert!(
+        //     token.vesting_end_time != 0 && token.total_supply != Some(0),
+        //     "Token is not registered",
+        // );
         assert!(
             env::signer_account_id() == token.creator,
             "Only creator is allowed to execute the function",
@@ -196,21 +226,20 @@ impl TokenFactory {
             // .add_full_access_key(env::signer_account_pk())
             .transfer(4_000_000_000_000_000_000_000_000)
             .deploy_contract(FT_WASM_CODE.to_vec())
-            .then(
-                ext_self::on_ft_contract_deployed(
-                    ft_contract,
-                    &env::current_account_id(),
-                    0, DEFAULT_GAS_FEE,
-                )
-            );
+            .then(ext_self::on_ft_contract_deployed(
+                ft_contract,
+                &env::current_account_id(),
+                0,
+                DEFAULT_GAS_FEE,
+            ));
     }
 
     pub fn create_deployer_contract(&mut self, ft_contract: AccountId) -> Promise {
         let token = self.tokens.get(&ft_contract).unwrap_or_default();
-        assert!(
-            token.vesting_end_time != 0 && token.total_supply != 0,
-            "Token is not registered",
-        );
+        // assert!(
+        //     token.vesting_end_time != 0 && token.total_supply != Some(0),
+        //     "Token is not registered",
+        // );
         assert!(
             env::signer_account_id() == token.creator,
             "Only creator is allowed to execute the function",
@@ -221,21 +250,20 @@ impl TokenFactory {
             // .add_full_access_key(env::signer_account_pk())
             .transfer(4_000_000_000_000_000_000_000_000)
             .deploy_contract(DEPLOYER_WASM_CODE.to_vec())
-            .then(
-                ext_self::on_ft_deployer_deployed(
-                    ft_contract,
-                    &env::current_account_id(),
-                    0, DEFAULT_GAS_FEE,
-                )
-            );
+            .then(ext_self::on_ft_deployer_deployed(
+                ft_contract,
+                &env::current_account_id(),
+                0,
+                DEFAULT_GAS_FEE,
+            ));
     }
 
     pub fn issue_ft(&mut self, ft_contract: AccountId) -> Promise {
         let token = self.tokens.get(&ft_contract).unwrap_or_default();
-        assert!(
-            token.vesting_end_time != 0 && token.total_supply != 0,
-            "Token is not registered",
-        );
+        // assert!(
+        //     token.vesting_end_time != 0 && token.total_supply != Some(0),
+        //     "Token is not registered",
+        // );
         assert!(
             env::signer_account_id() == token.creator,
             "Only creator is allowed to execute the function",
@@ -246,7 +274,11 @@ impl TokenFactory {
                 b"new".to_vec(),
                 json!({
                     "owner_id": token.ft_deployer,
-                    "total_supply": WrappedBalance::from(token.total_supply),
+                    "total_supply": WrappedBalance::from(
+                        token
+                            .total_supply
+                            .expect("Total supply is None !")
+                    ),
                     "metadata": {
                         "spec": "ft-1.0.0",
                         "name": token.token_name,
@@ -256,24 +288,27 @@ impl TokenFactory {
                         "reference_hash": token.reference,
                         "decimals": token.decimals,
                     }
-                }).to_string().as_bytes().to_vec(),
-                0, DEFAULT_GAS_FEE,
+                })
+                .to_string()
+                .as_bytes()
+                .to_vec(),
+                0,
+                DEFAULT_GAS_FEE,
             )
-            .then(
-                ext_self::on_token_issued(
-                    ft_contract,
-                    &env::current_account_id(),
-                    0, DEFAULT_GAS_FEE,
-                )
-            );
+            .then(ext_self::on_token_issued(
+                ft_contract,
+                &env::current_account_id(),
+                0,
+                DEFAULT_GAS_FEE,
+            ));
     }
 
     pub fn init_token_allocation(&mut self, ft_contract: AccountId) -> Promise {
         let token = self.tokens.get(&ft_contract).unwrap_or_default();
-        assert!(
-            token.vesting_end_time != 0 && token.total_supply != 0,
-            "Token is not registered",
-        );
+        // assert!(
+        //     token.vesting_end_time != 0 && token.total_supply != Some(0),
+        //     "Token is not registered",
+        // );
         assert!(
             env::signer_account_id() == token.creator,
             "Only creator is allowed to execute the function",
@@ -284,36 +319,42 @@ impl TokenFactory {
                 b"new".to_vec(),
                 json!({
                     "ft_contract_name": ft_contract,
-                    "total_supply": WrappedBalance::from(token.total_supply), 
-                    "allocations": {
-                        &token.creator: {
-                            "allocated_num": WrappedBalance::from(
-                                token.total_supply - token.treasury_allocation),
-                            "initial_release": WrappedBalance::from(token.initial_release),
-                            "vesting_start_time": WrappedTimestamp::from(token.vesting_start_time),
-                            "vesting_end_time": WrappedTimestamp::from(token.vesting_end_time),
-                            "vesting_interval": WrappedDuration::from(token.vesting_interval),
-                        },
-                        TOKENHUB_TREASURY: {
-                            "allocated_num": WrappedBalance::from(token.treasury_allocation),
-                            "initial_release": "0",
-                            "vesting_start_time": WrappedTimestamp::from(token.vesting_start_time),
-                            "vesting_end_time": WrappedTimestamp::from(token.vesting_end_time),
-                            "vesting_interval": WrappedDuration::from(token.vesting_interval),
-                        }
-                    }
-                }).to_string().as_bytes().to_vec(),
-                0, DEFAULT_GAS_FEE,
+                    "total_supply": WrappedBalance::from(
+                        token
+                            .total_supply
+                            .expect("Total supply is None !")
+                    ),
+                    // "allocations": {
+                    //     &token.creator: {
+                    //         "allocated_num": WrappedBalance::from(
+                    //             token.total_supply.unwrap() - token.treasury_allocation),
+                    //         "initial_release": WrappedBalance::from(token.initial_release),
+                    //         "vesting_start_time": WrappedTimestamp::from(token.vesting_start_time),
+                    //         "vesting_end_time": WrappedTimestamp::from(token.vesting_end_time),
+                    //         "vesting_interval": WrappedDuration::from(token.vesting_interval),
+                    //     },
+                    //     TOKENHUB_TREASURY: {
+                    //         "allocated_num": WrappedBalance::from(token.treasury_allocation),
+                    //         "initial_release": "0",
+                    //         "vesting_start_time": WrappedTimestamp::from(token.vesting_start_time),
+                    //         "vesting_end_time": WrappedTimestamp::from(token.vesting_end_time),
+                    //         "vesting_interval": WrappedDuration::from(token.vesting_interval),
+                    //     }
+                    // }
+                })
+                .to_string()
+                .as_bytes()
+                .to_vec(),
+                0,
+                DEFAULT_GAS_FEE,
             )
-            .then(
-                ext_self::on_allocation_init(
-                    ft_contract,
-                    &env::current_account_id(),
-                    0, DEFAULT_GAS_FEE,
-                )
-            );
+            .then(ext_self::on_allocation_init(
+                ft_contract,
+                &env::current_account_id(),
+                0,
+                DEFAULT_GAS_FEE,
+            ));
     }
-
 }
 
 /*
@@ -355,6 +396,4 @@ mod tests {
             epoch_height: 19,
         }
     }
-
-
 }
