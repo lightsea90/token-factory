@@ -135,10 +135,6 @@ impl TokenFactory {
             env::attached_deposit() >= 4_000_000_000_000_000_000_000_000,
             "Minimum deposit is 4 NEAR",
         );
-        // assert!(
-        //     token.vesting_end_time == 0 && token.total_supply == Some(0),
-        //     "Token is already registered",
-        // );
         
         let mut state_allocations = UnorderedMap::new(b"allocations".to_vec());
 
@@ -151,20 +147,22 @@ impl TokenFactory {
                 vesting_interval: alloc.vesting_interval.into(),
                 claimed: 0,
             };
+
+            self.assert_invalid_allocation(a.clone());
+
+            let total_allocs: u128 = state_allocations 
+                .values()
+                .map(|v: TokenAllocation| v.allocated_num)
+                .sum();
+
             assert!(
-                a.allocated_num >= a.initial_release + a.claimed,
-                "Allocation is smaller than the total claimable",
-            );
-            assert!(
-                a.vesting_interval <= a.vesting_end_time - a.vesting_start_time,
-                "Vesting interval is larger than vesting time",
+                total_allocs + a.allocated_num <= total_supply.into(),
+                "Total allocations is greater than total supply"
             );
             state_allocations.insert(account_id, &a);
         }
         
-        let mut token: State = self.tokens.get(&ft_contract).unwrap_or_default();
-
-        token = State {
+        let token = State {
             ft_contract: ft_contract.clone(),
             total_supply: Some(total_supply.into()),
             token_name: Some(token_name),
@@ -189,37 +187,23 @@ impl TokenFactory {
             token.total_supply > Some(0),
             "total_supply must be greater than 0",
         );
-        // assert!(
-        //     !env::is_valid_account_id(token.ft_contract.as_bytes()),
-        //     "ft_contract must not existed",
-        // );
-        // assert!(
-        //     !env::is_valid_account_id(token.ft_deployer.as_bytes()),
-        //     "ft_deployer already existed",
-        // );
-        // assert!(
-        //     token.vesting_interval <= token.vesting_end_time - token.vesting_start_time,
-        //     "Vesting interval is larger than vesting time",
-        // );
-        // assert!(
-        //     token.initial_release + token.treasury_allocation <= token.total_supply.unwrap_or(0),
-        //     "Total allocation is more than total supply",
-        // );
-        // TODO: validate more?
+        assert!(
+            !env::is_valid_account_id(token.ft_contract.as_bytes()),
+            "ft_contract must not existed",
+        );
+        assert!(
+            !env::is_valid_account_id(token.ft_deployer.as_bytes()),
+            "ft_deployer already existed",
+        );
 
+        // TODO: validate more?
         self.tokens.insert(&ft_contract, &token);
     }
 
     pub fn create_ft_contract(&mut self, ft_contract: AccountId) -> Promise {
-        let token = self.tokens.get(&ft_contract).unwrap_or_default();
-        // assert!(
-        //     token.vesting_end_time != 0 && token.total_supply != Some(0),
-        //     "Token is not registered",
-        // );
-        assert!(
-            env::signer_account_id() == token.creator,
-            "Only creator is allowed to execute the function",
-        );
+        let token = self.tokens.get(&ft_contract.clone()).unwrap_or_default();
+        self.assert_invalid_allocations(ft_contract.clone());
+        self.assert_singer_account(token.creator);
 
         return Promise::new(ft_contract.parse().unwrap())
             .create_account()
@@ -236,14 +220,8 @@ impl TokenFactory {
 
     pub fn create_deployer_contract(&mut self, ft_contract: AccountId) -> Promise {
         let token = self.tokens.get(&ft_contract).unwrap_or_default();
-        // assert!(
-        //     token.vesting_end_time != 0 && token.total_supply != Some(0),
-        //     "Token is not registered",
-        // );
-        assert!(
-            env::signer_account_id() == token.creator,
-            "Only creator is allowed to execute the function",
-        );
+        self.assert_invalid_allocations(ft_contract.clone());
+        self.assert_singer_account(token.creator);
 
         return Promise::new(token.ft_deployer.parse().unwrap())
             .create_account()
@@ -260,14 +238,8 @@ impl TokenFactory {
 
     pub fn issue_ft(&mut self, ft_contract: AccountId) -> Promise {
         let token = self.tokens.get(&ft_contract).unwrap_or_default();
-        // assert!(
-        //     token.vesting_end_time != 0 && token.total_supply != Some(0),
-        //     "Token is not registered",
-        // );
-        assert!(
-            env::signer_account_id() == token.creator,
-            "Only creator is allowed to execute the function",
-        );
+        self.assert_invalid_allocations(ft_contract.clone());
+        self.assert_singer_account(token.creator);
 
         return Promise::new(ft_contract.parse().unwrap())
             .function_call(
@@ -305,14 +277,26 @@ impl TokenFactory {
 
     pub fn init_token_allocation(&mut self, ft_contract: AccountId) -> Promise {
         let token = self.tokens.get(&ft_contract).unwrap_or_default();
-        // assert!(
-        //     token.vesting_end_time != 0 && token.total_supply != Some(0),
-        //     "Token is not registered",
-        // );
-        assert!(
-            env::signer_account_id() == token.creator,
-            "Only creator is allowed to execute the function",
-        );
+        self.assert_invalid_allocations(ft_contract.clone());
+        self.assert_singer_account(token.creator);
+
+        let mut alloctions: HashMap<AccountId, WrappedTokenAllocation> = HashMap::new();
+
+        for k in token.allocations.keys() {
+            alloctions.insert(
+                k.clone(),
+                token.allocations
+                .get(&k.clone())
+                .map(|v| WrappedTokenAllocation {
+                        allocated_num: WrappedBalance::from(v.allocated_num),
+                        initial_release: WrappedBalance::from(v.initial_release),
+                        vesting_start_time: WrappedTimestamp::from(v.vesting_start_time),
+                        vesting_end_time: WrappedTimestamp::from(v.vesting_end_time),
+                        vesting_interval: WrappedTimestamp::from(v.vesting_interval)
+                    })
+                .expect("Allocation not found")
+            );
+        }
 
         return Promise::new(token.ft_deployer.parse().unwrap())
             .function_call(
@@ -324,23 +308,7 @@ impl TokenFactory {
                             .total_supply
                             .expect("Total supply is None !")
                     ),
-                    // "allocations": {
-                    //     &token.creator: {
-                    //         "allocated_num": WrappedBalance::from(
-                    //             token.total_supply.unwrap() - token.treasury_allocation),
-                    //         "initial_release": WrappedBalance::from(token.initial_release),
-                    //         "vesting_start_time": WrappedTimestamp::from(token.vesting_start_time),
-                    //         "vesting_end_time": WrappedTimestamp::from(token.vesting_end_time),
-                    //         "vesting_interval": WrappedDuration::from(token.vesting_interval),
-                    //     },
-                    //     TOKENHUB_TREASURY: {
-                    //         "allocated_num": WrappedBalance::from(token.treasury_allocation),
-                    //         "initial_release": "0",
-                    //         "vesting_start_time": WrappedTimestamp::from(token.vesting_start_time),
-                    //         "vesting_end_time": WrappedTimestamp::from(token.vesting_end_time),
-                    //         "vesting_interval": WrappedDuration::from(token.vesting_interval),
-                    //     }
-                    // }
+                    "alloctions": alloctions
                 })
                 .to_string()
                 .as_bytes()
@@ -355,6 +323,59 @@ impl TokenFactory {
                 DEFAULT_GAS_FEE,
             ));
     }
+
+    /// Utils
+    //Get total allocations
+    pub fn assert_invalid_allocations(
+        &self,
+        ft_contract: AccountId
+    ) {
+        let token = self.tokens.get(&ft_contract).unwrap_or_default();
+
+        assert!(
+            token.total_supply != Some(0) && token.allocations.values_as_vector().len() != 0,
+            "Token is not register"
+        );
+
+        let total_allocations: u128 = token.allocations 
+                .values()
+                .map(|a| {
+                    self.assert_invalid_allocation(a.clone());
+                    a.allocated_num
+                })
+                .sum();
+        
+        assert!(
+            total_allocations == token.total_supply.unwrap_or(0),
+            "Total alloctions is not equal to total supply"
+        );
+    }
+
+    fn assert_invalid_allocation(
+        &self, 
+        allocation: TokenAllocation 
+    ) {
+            assert!(
+                allocation.allocated_num >= allocation.initial_release + allocation.claimed,
+                "Allocation is smaller than the total claimable",
+            );
+            assert!(
+                allocation.vesting_interval <= allocation.vesting_end_time - allocation.vesting_start_time,
+                "Vesting interval is larger than vesting time",
+            );
+    }
+
+    fn assert_singer_account(
+        &self,
+        creator: AccountId
+    ) {
+        assert!(
+            env::signer_account_id() == creator,
+            "Only creator is allowed to execute the function",
+        );
+
+    }
+
 }
 
 /*

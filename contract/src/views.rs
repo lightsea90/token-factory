@@ -4,6 +4,7 @@ use crate::*;
 impl TokenFactory {
     pub fn get_token_state(self, ft_contract: AccountId) -> Value {
         let token = self.tokens.get(&ft_contract).unwrap_or_default();
+        self.assert_invalid_allocations(ft_contract);
         // assert!(
         //     token.vesting_end_time != 0 && token.total_supply != Some(0),
         //     "Token is not registered",

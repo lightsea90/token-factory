@@ -18,10 +18,7 @@ impl TokenFactory {
         match env::promise_result(0) {
             PromiseResult::Successful(_) => {
                 let mut token = self.tokens.remove(&ft_contract).unwrap_or_default();
-                // assert!(
-                //     token.vesting_end_time != 0 && token.total_supply != Some(0),
-                //     "Token is not registered",
-                // );
+                self.assert_invalid_allocations(ft_contract.clone());
                 assert!(
                     token.ft_contract_deployed == 0,
                     "State ft_contract_deployed is invalid",
@@ -41,10 +38,7 @@ impl TokenFactory {
         match env::promise_result(0) {
             PromiseResult::Successful(_) => {
                 let mut token = self.tokens.remove(&ft_contract).unwrap_or_default();
-                // assert!(
-                //     token.vesting_end_time != 0 && token.total_supply != Some(0),
-                //     "Token is not registered",
-                // );
+                self.assert_invalid_allocations(ft_contract.clone());
                 assert!(
                     token.deployer_contract_deployed == 0,
                     "State deployer_contract_deployed is invalid",
@@ -63,10 +57,7 @@ impl TokenFactory {
         match env::promise_result(0) {
             PromiseResult::Successful(_) => {
                 let mut token = self.tokens.remove(&ft_contract).unwrap_or_default();
-                // assert!(
-                //     token.vesting_end_time != 0 && token.total_supply != Some(0),
-                //     "Token is not registered",
-                // );
+                self.assert_invalid_allocations(ft_contract.clone());
                 assert!(token.ft_issued == 0, "State ft_issued is invalid",);
                 token.ft_issued = 1;
                 self.tokens.insert(&ft_contract, &token);
@@ -82,10 +73,7 @@ impl TokenFactory {
         match env::promise_result(0) {
             PromiseResult::Successful(_) => {
                 let mut token = self.tokens.remove(&ft_contract).unwrap_or_default();
-                // assert!(
-                //     token.vesting_end_time != 0 && token.total_supply != Some(0),
-                //     "Token is not registered",
-                // );
+                self.assert_invalid_allocations(ft_contract.clone());
                 assert!(
                     token.allocation_initialized == 0,
                     "State allocation_initialized is invalid",
