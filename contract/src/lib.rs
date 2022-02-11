@@ -26,14 +26,15 @@ const DEFAULT_GAS_FEE: Gas = 20_000_000_000_000;
 const TOKENHUB_TREASURY: &str = "treasury.tokenhub.testnet";
 const FT_WASM_CODE: &[u8] = include_bytes!("../../static/fungible_token.wasm");
 const DEPLOYER_WASM_CODE: &[u8] = include_bytes!("../../static/token_deployer.wasm");
+const MAX_SUPPLY_PERCENT: u64 = 10000; // Decimal: 2
 
 pub type TokenAllocationInput = HashMap<AccountId, WrappedTokenAllocation>;
 
 #[derive(BorshDeserialize, BorshSerialize, Clone, Deserialize, Serialize)]
 #[serde(crate = "near_sdk::serde")]
 pub struct WrappedTokenAllocation {
-    allocated_num: WrappedBalance,
-    initial_release: WrappedBalance,
+    allocated_percent: u64,
+    initial_release: u64,
     vesting_start_time: WrappedTimestamp,
     vesting_end_time: WrappedTimestamp,
     vesting_interval: WrappedDuration,
@@ -42,32 +43,39 @@ pub struct WrappedTokenAllocation {
 #[derive(BorshDeserialize, BorshSerialize, Clone, Deserialize, Serialize)]
 #[serde(crate = "near_sdk::serde")]
 pub struct TokenAllocation {
-    allocated_num: Balance,
-    initial_release: Balance,
+    allocated_percent: u64, // Decimal: 2
+    initial_release: u64, 
     vesting_start_time: Timestamp,
     vesting_end_time: Timestamp,
     vesting_interval: Duration,
-    claimed: Balance,
+    claimed: u64, 
 }
+
+#[derive(BorshDeserialize, BorshSerialize, Clone, Deserialize, Serialize)]
+#[serde(crate = "near_sdk::serde")]
+pub struct FTMetadata {
+    total_supply: Balance,
+    token_name: String,
+    symbol: String,
+    icon: Option<String>,
+    reference: Option<String>,
+    reference_hash: Option<Base64VecU8>,
+    decimals: u8,
+}
+
 
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct State {
     // token info
     ft_contract: AccountId,
-    total_supply: Option<Balance>,
-    token_name: Option<String>,
-    symbol: Option<String>,
-    icon: Option<String>,
-    reference: Option<String>,
-    reference_hash: Option<Base64VecU8>,
-    decimals: Option<u8>,
+    ft_metadata: Option<FTMetadata>,
 
     // creator and deployer
     ft_deployer: AccountId,
     creator: AccountId,
 
     // Multiple tokenomics
-    allocations: UnorderedMap<AccountId, TokenAllocation>,
+    allocations: UnorderedMap<AccountId, TokenAllocation>, // => None after deploy token
 
     // issuance states
     ft_contract_deployed: u8,
@@ -81,13 +89,15 @@ impl Default for State {
         let default_string_value = String::from("__default_value__");
         Self {
             ft_contract: default_string_value.clone(),
-            total_supply: Some(0),
-            token_name: Some(default_string_value.clone()),
-            symbol: Some(default_string_value.clone()),
-            icon: Some(default_string_value.clone()),
-            reference: None,
-            reference_hash: None,
-            decimals: Some(0),
+            ft_metadata: Some(FTMetadata {
+                total_supply: 0,
+                token_name: default_string_value.clone(),
+                symbol: default_string_value.clone(),
+                icon: Some(default_string_value.clone()),
+                reference: None,
+                reference_hash: None,
+                decimals: 0,
+                }),
 
             ft_deployer: default_string_value.clone(),
             creator: default_string_value.clone(),
@@ -138,39 +148,53 @@ impl TokenFactory {
         
         let mut state_allocations = UnorderedMap::new(b"allocations".to_vec());
 
+        let mut treasury_exist = false;
+
         for (account_id, alloc) in &allocations {
             let a = TokenAllocation {
-                allocated_num: alloc.allocated_num.into(),
-                initial_release: alloc.initial_release.into(),
+                allocated_percent: alloc.allocated_percent.into(),
+                initial_release: alloc.initial_release,
                 vesting_start_time: alloc.vesting_start_time.into(),
                 vesting_end_time: alloc.vesting_end_time.into(),
                 vesting_interval: alloc.vesting_interval.into(),
                 claimed: 0,
             };
 
+            if account_id == TOKENHUB_TREASURY && 
+            a.allocated_percent > 0 {
+                treasury_exist = true;
+            }
+
             self.assert_invalid_allocation(a.clone());
 
-            let total_allocs: u128 = state_allocations 
+            let total_allocs: u64 = state_allocations 
                 .values()
-                .map(|v: TokenAllocation| v.allocated_num)
+                .map(|v: TokenAllocation| v.allocated_percent)
                 .sum();
 
             assert!(
-                total_allocs + a.allocated_num <= total_supply.into(),
+                total_allocs + a.allocated_percent <= MAX_SUPPLY_PERCENT,
                 "Total allocations is greater than total supply"
             );
             state_allocations.insert(account_id, &a);
         }
+
+        assert!(
+            treasury_exist, 
+            "Treasury allocation must be exist!"
+        );
         
         let token = State {
             ft_contract: ft_contract.clone(),
-            total_supply: Some(total_supply.into()),
-            token_name: Some(token_name),
-            symbol: Some(symbol),
-            icon,
-            reference,
-            reference_hash,
-            decimals: Some(decimals),
+            ft_metadata: Some(FTMetadata {
+                total_supply: total_supply.into(),
+                token_name,
+                symbol,
+                icon,
+                reference,
+                reference_hash,
+                decimals,
+                }),
 
             ft_deployer: deployer_contract,
             creator: env::signer_account_id(),
@@ -184,7 +208,10 @@ impl TokenFactory {
         };
 
         assert!(
-            token.total_supply > Some(0),
+            token.ft_metadata
+                .as_ref()
+                .expect("Not found ft_metadata")
+                .total_supply > 0,
             "total_supply must be greater than 0",
         );
         assert!(
@@ -241,24 +268,27 @@ impl TokenFactory {
         self.assert_invalid_allocations(ft_contract.clone());
         self.assert_singer_account(token.creator);
 
+        let ft_metadata = token.ft_metadata
+                            .expect("Not found ft_metadata");
+        
+
         return Promise::new(ft_contract.parse().unwrap())
             .function_call(
                 b"new".to_vec(),
                 json!({
                     "owner_id": token.ft_deployer,
                     "total_supply": WrappedBalance::from(
-                        token
+                            ft_metadata
                             .total_supply
-                            .expect("Total supply is None !")
                     ),
                     "metadata": {
                         "spec": "ft-1.0.0",
-                        "name": token.token_name,
-                        "symbol": token.symbol,
-                        "icon": token.icon,
-                        "reference": token.reference,
-                        "reference_hash": token.reference,
-                        "decimals": token.decimals,
+                        "name": ft_metadata.token_name,
+                        "symbol": ft_metadata.symbol,
+                        "icon": ft_metadata.icon,
+                        "reference": ft_metadata.reference,
+                        "reference_hash": ft_metadata.reference,
+                        "decimals": ft_metadata.decimals,
                     }
                 })
                 .to_string()
@@ -288,8 +318,8 @@ impl TokenFactory {
                 token.allocations
                 .get(&k.clone())
                 .map(|v| WrappedTokenAllocation {
-                        allocated_num: WrappedBalance::from(v.allocated_num),
-                        initial_release: WrappedBalance::from(v.initial_release),
+                        allocated_percent: v.allocated_percent,
+                        initial_release: v.initial_release,
                         vesting_start_time: WrappedTimestamp::from(v.vesting_start_time),
                         vesting_end_time: WrappedTimestamp::from(v.vesting_end_time),
                         vesting_interval: WrappedTimestamp::from(v.vesting_interval)
@@ -305,8 +335,9 @@ impl TokenFactory {
                     "ft_contract_name": ft_contract,
                     "total_supply": WrappedBalance::from(
                         token
+                            .ft_metadata
+                            .expect("Not found ft_metadata")
                             .total_supply
-                            .expect("Total supply is None !")
                     ),
                     "alloctions": alloctions
                 })
@@ -333,20 +364,28 @@ impl TokenFactory {
         let token = self.tokens.get(&ft_contract).unwrap_or_default();
 
         assert!(
-            token.total_supply != Some(0) && token.allocations.values_as_vector().len() != 0,
+            token
+                .ft_metadata
+                .as_ref()
+                .expect("Not found ft_metadata")
+                .total_supply != 0 
+            && token
+                .allocations
+                .values_as_vector()
+                .len() != 0,
             "Token is not register"
         );
 
-        let total_allocations: u128 = token.allocations 
+        let total_allocations: u64 = token.allocations 
                 .values()
                 .map(|a| {
                     self.assert_invalid_allocation(a.clone());
-                    a.allocated_num
+                    a.allocated_percent
                 })
                 .sum();
         
         assert!(
-            total_allocations == token.total_supply.unwrap_or(0),
+            total_allocations == MAX_SUPPLY_PERCENT,
             "Total alloctions is not equal to total supply"
         );
     }
@@ -355,8 +394,9 @@ impl TokenFactory {
         &self, 
         allocation: TokenAllocation 
     ) {
+        //TODO: Allocation > 0
             assert!(
-                allocation.allocated_num >= allocation.initial_release + allocation.claimed,
+                allocation.allocated_percent >= allocation.initial_release + allocation.claimed,
                 "Allocation is smaller than the total claimable",
             );
             assert!(
