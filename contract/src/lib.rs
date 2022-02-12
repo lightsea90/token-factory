@@ -145,8 +145,15 @@ impl TokenFactory {
             env::attached_deposit() >= 4_000_000_000_000_000_000_000_000,
             "Minimum deposit is 4 NEAR",
         );
+
+        let mut allocation_prefix = Vec::with_capacity(33);
+            // Adding unique prefix.
+            allocation_prefix.push(b'a');
+            // Adding the hash of the account_id (key of the outer map) to the prefix.
+            // This is needed to differentiate across accounts.
+            allocation_prefix.extend(env::sha256(ft_contract.as_bytes()));
         
-        let mut state_allocations = UnorderedMap::new(b"allocations".to_vec());
+        let mut state_allocations = UnorderedMap::new(allocation_prefix);
 
         let mut treasury_exist = false;
 
@@ -160,8 +167,7 @@ impl TokenFactory {
                 claimed: 0,
             };
 
-            if account_id == TOKENHUB_TREASURY && 
-            a.allocated_percent > 0 {
+            if account_id == TOKENHUB_TREASURY && a.allocated_percent > 0 {
                 treasury_exist = true;
             }
 
@@ -230,7 +236,7 @@ impl TokenFactory {
     pub fn create_ft_contract(&mut self, ft_contract: AccountId) -> Promise {
         let token = self.tokens.get(&ft_contract.clone()).unwrap_or_default();
         self.assert_invalid_allocations(ft_contract.clone());
-        self.assert_singer_account(token.creator);
+        self.assert_signer_account(token.creator);
 
         return Promise::new(ft_contract.parse().unwrap())
             .create_account()
@@ -248,7 +254,7 @@ impl TokenFactory {
     pub fn create_deployer_contract(&mut self, ft_contract: AccountId) -> Promise {
         let token = self.tokens.get(&ft_contract).unwrap_or_default();
         self.assert_invalid_allocations(ft_contract.clone());
-        self.assert_singer_account(token.creator);
+        self.assert_signer_account(token.creator);
 
         return Promise::new(token.ft_deployer.parse().unwrap())
             .create_account()
@@ -266,7 +272,7 @@ impl TokenFactory {
     pub fn issue_ft(&mut self, ft_contract: AccountId) -> Promise {
         let token = self.tokens.get(&ft_contract).unwrap_or_default();
         self.assert_invalid_allocations(ft_contract.clone());
-        self.assert_singer_account(token.creator);
+        self.assert_signer_account(token.creator);
 
         let ft_metadata = token.ft_metadata
                             .expect("Not found ft_metadata");
@@ -308,7 +314,7 @@ impl TokenFactory {
     pub fn init_token_allocation(&mut self, ft_contract: AccountId) -> Promise {
         let token = self.tokens.get(&ft_contract).unwrap_or_default();
         self.assert_invalid_allocations(ft_contract.clone());
-        self.assert_singer_account(token.creator);
+        self.assert_signer_account(token.creator);
 
         let mut alloctions: HashMap<AccountId, WrappedTokenAllocation> = HashMap::new();
 
@@ -405,7 +411,7 @@ impl TokenFactory {
             );
     }
 
-    fn assert_singer_account(
+    fn assert_signer_account(
         &self,
         creator: AccountId
     ) {
