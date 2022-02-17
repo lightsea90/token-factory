@@ -14,17 +14,11 @@ pub trait ExtTokenFactory {
 impl TokenFactory {
     #[private]
     pub fn on_ft_contract_deployed(&mut self, ft_contract: AccountId) -> bool {
-        env::log(
-            format!("promise_result_count = {}", env::promise_results_count())
-            .as_bytes()
-        );
+        env::log(format!("promise_result_count = {}", env::promise_results_count()).as_bytes());
         match env::promise_result(0) {
             PromiseResult::Successful(_) => {
                 let mut token = self.tokens.remove(&ft_contract).unwrap_or_default();
-                assert!(
-                    token.vesting_end_time != 0 && token.total_supply != 0,
-                    "Token is not registered",
-                );
+                self.assert_invalid_allocations(ft_contract.clone());
                 assert!(
                     token.ft_contract_deployed == 0,
                     "State ft_contract_deployed is invalid",
@@ -32,25 +26,19 @@ impl TokenFactory {
                 token.ft_contract_deployed = 1;
                 self.tokens.insert(&ft_contract, &token);
                 true
-            },
-            _ => false
+            }
+            _ => false,
         }
     }
 
     #[private]
     pub fn on_ft_deployer_deployed(&mut self, ft_contract: AccountId) -> bool {
-        env::log(
-            format!("promise_result_count = {}", env::promise_results_count())
-            .as_bytes()
-        );
+        env::log(format!("promise_result_count = {}", env::promise_results_count()).as_bytes());
         // format!("fasfas");
         match env::promise_result(0) {
             PromiseResult::Successful(_) => {
                 let mut token = self.tokens.remove(&ft_contract).unwrap_or_default();
-                assert!(
-                    token.vesting_end_time != 0 && token.total_supply != 0,
-                    "Token is not registered",
-                );
+                self.assert_invalid_allocations(ft_contract.clone());
                 assert!(
                     token.deployer_contract_deployed == 0,
                     "State deployer_contract_deployed is invalid",
@@ -58,49 +46,37 @@ impl TokenFactory {
                 token.deployer_contract_deployed = 1;
                 self.tokens.insert(&ft_contract, &token);
                 true
-            },
-            _ => false
+            }
+            _ => false,
         }
     }
 
     #[private]
     pub fn on_token_issued(&mut self, ft_contract: AccountId) -> bool {
-        env::log(
-            format!("promise_result_count = {}", env::promise_results_count())
-            .as_bytes()
-        );
+        env::log(format!("promise_result_count = {}", env::promise_results_count()).as_bytes());
         match env::promise_result(0) {
             PromiseResult::Successful(_) => {
                 let mut token = self.tokens.remove(&ft_contract).unwrap_or_default();
-                assert!(
-                    token.vesting_end_time != 0 && token.total_supply != 0,
-                    "Token is not registered",
-                );
-                assert!(
-                    token.ft_issued == 0,
-                    "State ft_issued is invalid",
-                );
+                
+                self.assert_invalid_allocations(ft_contract.clone());
+                assert!(token.ft_issued == 0, "State ft_issued is invalid",);
                 token.ft_issued = 1;
+                token.ft_metadata = None;
+                token.allocations.clear();
                 self.tokens.insert(&ft_contract, &token);
                 true
-            },
-            _ => false
+            }
+            _ => false,
         }
     }
 
     #[private]
     pub fn on_allocation_init(&mut self, ft_contract: AccountId) -> bool {
-        env::log(
-            format!("promise_result_count = {}", env::promise_results_count())
-            .as_bytes()
-        );
+        env::log(format!("promise_result_count = {}", env::promise_results_count()).as_bytes());
         match env::promise_result(0) {
             PromiseResult::Successful(_) => {
                 let mut token = self.tokens.remove(&ft_contract).unwrap_or_default();
-                assert!(
-                    token.vesting_end_time != 0 && token.total_supply != 0,
-                    "Token is not registered",
-                );
+                self.assert_invalid_allocations(ft_contract.clone());
                 assert!(
                     token.allocation_initialized == 0,
                     "State allocation_initialized is invalid",
@@ -108,9 +84,9 @@ impl TokenFactory {
                 token.allocation_initialized = 1;
                 self.tokens.insert(&ft_contract, &token);
                 true
-            },
-            _ => false
+            }
+            _ => false,
         }
     }
-
 }
+
