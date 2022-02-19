@@ -34,8 +34,8 @@ impl TokenFactory {
                 // let e = json!({state.ft_contract});
                 let e = json!({
                     "ft_contract": state.ft_contract,
-                    "ft_metadata": state.ft_metadata
-                                    .expect("Not found ft_metadata"),
+                    "ft_metadata": WrappedFTMetadata::from(state.ft_metadata
+                                    .expect("Not found ft_metadata")),
                     "allocations": state.allocations.to_vec(),
 
                     "ft_deployer": state.ft_deployer,

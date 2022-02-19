@@ -63,6 +63,32 @@ pub struct FTMetadata {
     decimals: u8,
 }
 
+#[derive(BorshDeserialize, BorshSerialize, Clone, Deserialize, Serialize)]
+#[serde(crate = "near_sdk::serde")]
+pub struct WrappedFTMetadata {
+    total_supply: WrappedBalance,
+    token_name: String,
+    symbol: String,
+    icon: Option<String>,
+    reference: Option<String>,
+    reference_hash: Option<Base64VecU8>,
+    decimals: u8,
+}
+
+impl From<FTMetadata> for WrappedFTMetadata {
+   fn from(ft_metadata: FTMetadata) -> Self {
+       WrappedFTMetadata {
+        total_supply: WrappedBalance::from(ft_metadata.total_supply),
+        token_name: ft_metadata.token_name,
+        symbol: ft_metadata.symbol,
+        icon: ft_metadata.icon,
+        reference: ft_metadata.reference,
+        reference_hash: ft_metadata.reference_hash,
+        decimals: ft_metadata.decimals,
+       }
+   }
+}
+
 
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct State {
