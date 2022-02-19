@@ -17,8 +17,8 @@ impl TokenFactory {
         env::log(format!("promise_result_count = {}", env::promise_results_count()).as_bytes());
         match env::promise_result(0) {
             PromiseResult::Successful(_) => {
-                let mut token = self.tokens.remove(&ft_contract).unwrap_or_default();
                 self.assert_invalid_allocations(ft_contract.clone());
+                let mut token = self.tokens.remove(&ft_contract).unwrap_or_default();
                 assert!(
                     token.ft_contract_deployed == 0,
                     "State ft_contract_deployed is invalid",
@@ -37,8 +37,8 @@ impl TokenFactory {
         // format!("fasfas");
         match env::promise_result(0) {
             PromiseResult::Successful(_) => {
-                let mut token = self.tokens.remove(&ft_contract).unwrap_or_default();
                 self.assert_invalid_allocations(ft_contract.clone());
+                let mut token = self.tokens.remove(&ft_contract).unwrap_or_default();
                 assert!(
                     token.deployer_contract_deployed == 0,
                     "State deployer_contract_deployed is invalid",
@@ -56,13 +56,10 @@ impl TokenFactory {
         env::log(format!("promise_result_count = {}", env::promise_results_count()).as_bytes());
         match env::promise_result(0) {
             PromiseResult::Successful(_) => {
-                let mut token = self.tokens.remove(&ft_contract).unwrap_or_default();
-                
                 self.assert_invalid_allocations(ft_contract.clone());
+                let mut token = self.tokens.remove(&ft_contract).unwrap_or_default();
                 assert!(token.ft_issued == 0, "State ft_issued is invalid",);
                 token.ft_issued = 1;
-                token.ft_metadata = None;
-                token.allocations.clear();
                 self.tokens.insert(&ft_contract, &token);
                 true
             }
@@ -75,13 +72,15 @@ impl TokenFactory {
         env::log(format!("promise_result_count = {}", env::promise_results_count()).as_bytes());
         match env::promise_result(0) {
             PromiseResult::Successful(_) => {
-                let mut token = self.tokens.remove(&ft_contract).unwrap_or_default();
                 self.assert_invalid_allocations(ft_contract.clone());
+                let mut token = self.tokens.remove(&ft_contract).unwrap_or_default();
                 assert!(
                     token.allocation_initialized == 0,
                     "State allocation_initialized is invalid",
                 );
                 token.allocation_initialized = 1;
+                token.ft_metadata = None;
+                token.allocations.clear();
                 self.tokens.insert(&ft_contract, &token);
                 true
             }
