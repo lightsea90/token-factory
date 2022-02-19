@@ -135,7 +135,11 @@ impl From<State> for WrappedState {
    fn from(state: State) -> Self {
        WrappedState {
         ft_contract: state.ft_contract,
-        ft_metadata: Some(WrappedFTMetadata::from(state.ft_metadata.expect("ft metadata not found!"))),
+        ft_metadata: match state.ft_metadata {
+            None => None,
+            Some(d) => Some(WrappedFTMetadata::from(d)),
+        },
+        // Some(WrappedFTMetadata::from(state.ft_metadata.expect("ft metadata not found!"))),
 
         // creator and deployer
         ft_deployer: state.ft_deployer,
@@ -166,7 +170,7 @@ impl Default for State {
                 reference: None,
                 reference_hash: None,
                 decimals: 0,
-                }),
+            }),
 
             ft_deployer: default_string_value.clone(),
             creator: default_string_value.clone(),

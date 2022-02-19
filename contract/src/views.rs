@@ -17,7 +17,7 @@ impl TokenFactory {
 
         for token in token_list.iter() {
             let state = self.tokens.get(&token).unwrap_or_default();
-            if state.creator.eq(&account_id) && state.ft_metadata.is_some() {
+            if state.creator.eq(&account_id) {
                 // let e = json!({state.ft_contract});
                 let e = WrappedState::from(state);
                 result.push(e);
