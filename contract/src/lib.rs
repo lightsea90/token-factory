@@ -110,6 +110,49 @@ pub struct State {
     allocation_initialized: u8,
 }
 
+#[derive(BorshDeserialize, BorshSerialize, Clone, Deserialize, Serialize)]
+#[serde(crate = "near_sdk::serde")]
+pub struct WrappedState {
+    // token info
+    ft_contract: AccountId,
+    ft_metadata: Option<WrappedFTMetadata>,
+
+    // creator and deployer
+    ft_deployer: AccountId,
+    creator: AccountId,
+
+    // Multiple tokenomics
+    allocations: Vec<(AccountId, TokenAllocation)>,// => None after deploy token
+
+    // issuance states
+    ft_contract_deployed: u8,
+    deployer_contract_deployed: u8,
+    ft_issued: u8,
+    allocation_initialized: u8,
+}
+
+impl From<State> for WrappedState {
+   fn from(state: State) -> Self {
+       WrappedState {
+        ft_contract: state.ft_contract,
+        ft_metadata: Some(WrappedFTMetadata::from(state.ft_metadata.expect("ft metadata not found!"))),
+
+        // creator and deployer
+        ft_deployer: state.ft_deployer,
+        creator: state.creator,
+
+        // Multiple tokenomics
+        allocations: state.allocations.to_vec(), // => None after deploy token
+
+        // issuance states
+        ft_contract_deployed: state.ft_contract_deployed,
+        deployer_contract_deployed: state.deployer_contract_deployed,
+        ft_issued: state.ft_issued,
+        allocation_initialized: state.allocation_initialized,
+       }
+   }
+}
+
 impl Default for State {
     fn default() -> Self {
         let default_string_value = String::from("__default_value__");
