@@ -90,28 +90,6 @@ $ near call ${test_id}-deployer.tokenhub.testnet claim --accountId treasury.toke
 Demo for new functions
 
 ```
-$ near view tokenhub.testnet list_all_tokens
-View call: tokenhub.testnet.list_all_tokens()
-[
-  'test001.tokenhub.testnet',
-  'test002.tokenhub.testnet',
-  'test003.tokenhub.testnet',
-  'TESTT.tokenhub.testnet',
-  'TESTT1.tokenhub.testnet',
-  'TESTT3.tokenhub.testnet',
-  'testt.tokenhub.testnet',
-  'testt1.tokenhub.testnet',
-  'mytot.tokenhub.testnet',
-  'ttss2.tokenhub.testnet',
-  'test004.tokenhub.testnet',
-  'tt2.tokenhub.testnet',
-  'tst2.tokenhub.testnet',
-  'tst3.tokenhub.testnet',
-  'ttst2.tokenhub.testnet',
-  'testwifi.tokenhub.testnet',
-  'lost.tokenhub.testnet'
-]
-
 $ near view tokenhub.testnet list_my_tokens '{"account_id": "harrynguyen.testnet"}'
 View call: tokenhub.testnet.list_my_tokens({"account_id": "harrynguyen.testnet"})
 [ 'test005_harryng.tokenhub.testnet' ]
