@@ -191,7 +191,7 @@ impl TokenFactory {
 
         assert!(
             treasury_exist, 
-            "Treasury allocation must be exist!"
+            "Treasury allocation must exist!"
         );
         
         let token = State {
@@ -225,13 +225,16 @@ impl TokenFactory {
             "total_supply must be greater than 0",
         );
         assert!(
-            !env::is_valid_account_id(token.ft_contract.as_bytes()),
-            "ft_contract must not existed",
+            env::is_valid_account_id(token.ft_contract.as_bytes()),
+            "ft_contract is not valid",
         );
         assert!(
-            !env::is_valid_account_id(token.ft_deployer.as_bytes()),
-            "ft_deployer already existed",
+            env::is_valid_account_id(token.ft_deployer.as_bytes()),
+            "ft_deployer is not valid",
         );
+        if let Some(_) = self.tokens.get(&token.ft_contract) {
+            std::panic!("ft_contract already registered");
+        }
 
         // TODO: validate more?
         self.tokens.insert(&ft_contract, &token);
@@ -240,7 +243,7 @@ impl TokenFactory {
     pub fn create_ft_contract(&mut self, ft_contract: AccountId) -> Promise {
         let token = self.tokens.get(&ft_contract.clone()).unwrap_or_default();
         self.assert_invalid_allocations(ft_contract.clone());
-        self.assert_signer_account(token.creator);
+        self.assert_creator(token.creator);
 
         return Promise::new(ft_contract.parse().unwrap())
             .create_account()
@@ -258,7 +261,7 @@ impl TokenFactory {
     pub fn create_deployer_contract(&mut self, ft_contract: AccountId) -> Promise {
         let token = self.tokens.get(&ft_contract).unwrap_or_default();
         self.assert_invalid_allocations(ft_contract.clone());
-        self.assert_signer_account(token.creator);
+        self.assert_creator(token.creator);
 
         return Promise::new(token.ft_deployer.parse().unwrap())
             .create_account()
@@ -276,7 +279,7 @@ impl TokenFactory {
     pub fn issue_ft(&mut self, ft_contract: AccountId) -> Promise {
         let token = self.tokens.get(&ft_contract).unwrap_or_default();
         self.assert_invalid_allocations(ft_contract.clone());
-        self.assert_signer_account(token.creator);
+        self.assert_creator(token.creator);
 
         let ft_metadata = token.ft_metadata
                             .expect("Not found ft_metadata");
@@ -318,12 +321,12 @@ impl TokenFactory {
     pub fn init_token_allocation(&mut self, ft_contract: AccountId) -> Promise {
         let token = self.tokens.get(&ft_contract).unwrap_or_default();
         self.assert_invalid_allocations(ft_contract.clone());
-        self.assert_signer_account(token.creator);
+        self.assert_creator(token.creator);
 
-        let mut alloctions: HashMap<AccountId, WrappedTokenAllocation> = HashMap::new();
+        let mut allocations: HashMap<AccountId, WrappedTokenAllocation> = HashMap::new();
 
         for k in token.allocations.keys() {
-            alloctions.insert(
+            allocations.insert(
                 k.clone(),
                 token.allocations
                 .get(&k.clone())
@@ -349,7 +352,7 @@ impl TokenFactory {
                             .expect("Not found ft_metadata")
                             .total_supply
                     ),
-                    "alloctions": alloctions
+                    "allocations": allocations
                 })
                 .to_string()
                 .as_bytes()
@@ -373,16 +376,22 @@ impl TokenFactory {
     ) {
         let token = self.tokens.get(&ft_contract).unwrap_or_default();
 
+        env::log(format!(
+            "total supply: {}, allocation length: {}",
+            token.ft_metadata.as_ref().expect("fadfa").total_supply,
+            token.allocations.values_as_vector().len(),
+        ).as_bytes());
+
         assert!(
             token
                 .ft_metadata
                 .as_ref()
                 .expect("Not found ft_metadata")
-                .total_supply != 0 
+                .total_supply > 0 
             && token
                 .allocations
                 .values_as_vector()
-                .len() != 0,
+                .len() > 0,
             "Token is not register"
         );
 
@@ -396,7 +405,7 @@ impl TokenFactory {
         
         assert!(
             total_allocations == MAX_SUPPLY_PERCENT,
-            "Total alloctions is not equal to total supply"
+            "Total allocations is not equal to total supply"
         );
     }
 
@@ -415,7 +424,7 @@ impl TokenFactory {
             );
     }
 
-    fn assert_signer_account(
+    fn assert_creator(
         &self,
         creator: AccountId
     ) {
