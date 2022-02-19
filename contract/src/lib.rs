@@ -5,7 +5,7 @@ Functions:
 
 // To conserve gas, efficient serialization is achieved through Borsh (http://borsh.io/)
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
-use near_sdk::collections::UnorderedMap;
+use near_sdk::collections::{UnorderedMap, UnorderedSet};
 use near_sdk::json_types::{Base64VecU8, WrappedBalance, WrappedDuration, WrappedTimestamp};
 use near_sdk::serde_json::{json, Value};
 use near_sdk::{env, near_bindgen, PanicOnDefault};
@@ -115,14 +115,18 @@ impl Default for State {
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
 pub struct TokenFactory {
+    owner_id: AccountId,
+    admins: UnorderedSet<AccountId>,
     tokens: UnorderedMap<AccountId, State>,
 }
 
 #[near_bindgen]
 impl TokenFactory {
     #[init]
-    pub fn new() -> Self {
+    pub fn new(owner_id: AccountId) -> Self {
         return Self {
+            owner_id: String::from(owner_id),
+            admins: UnorderedSet::new(b"admins".to_vec()),
             tokens: UnorderedMap::new(b"tokenspec".to_vec()),
         };
     }
