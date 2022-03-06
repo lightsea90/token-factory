@@ -288,7 +288,7 @@ impl TokenFactory {
                 reference,
                 reference_hash,
                 decimals,
-                }),
+            }),
 
             ft_deployer: deployer_contract,
             creator: env::signer_account_id(),
@@ -326,7 +326,6 @@ impl TokenFactory {
 
     pub fn create_ft_contract(&mut self, ft_contract: AccountId) -> Promise {
         let token = self.tokens.get(&ft_contract.clone()).unwrap_or_default();
-        self.assert_invalid_allocations(ft_contract.clone());
         self.assert_creator(token.creator);
 
         return Promise::new(ft_contract.parse().unwrap())
@@ -344,7 +343,6 @@ impl TokenFactory {
 
     pub fn create_deployer_contract(&mut self, ft_contract: AccountId) -> Promise {
         let token = self.tokens.get(&ft_contract).unwrap_or_default();
-        self.assert_invalid_allocations(ft_contract.clone());
         self.assert_creator(token.creator);
 
         return Promise::new(token.ft_deployer.parse().unwrap())
@@ -362,12 +360,9 @@ impl TokenFactory {
 
     pub fn issue_ft(&mut self, ft_contract: AccountId) -> Promise {
         let token = self.tokens.get(&ft_contract).unwrap_or_default();
-        self.assert_invalid_allocations(ft_contract.clone());
         self.assert_creator(token.creator);
 
-        let ft_metadata = token.ft_metadata
-                            .expect("Not found ft_metadata");
-        
+        let ft_metadata = token.ft_metadata.expect("Not found ft_metadata");
 
         return Promise::new(ft_contract.parse().unwrap())
             .function_call(
@@ -404,7 +399,6 @@ impl TokenFactory {
 
     pub fn init_token_allocation(&mut self, ft_contract: AccountId) -> Promise {
         let token = self.tokens.get(&ft_contract).unwrap_or_default();
-        self.assert_invalid_allocations(ft_contract.clone());
         self.assert_creator(token.creator);
 
         let mut allocations: HashMap<AccountId, WrappedTokenAllocation> = HashMap::new();
@@ -415,12 +409,12 @@ impl TokenFactory {
                 token.allocations
                 .get(&k.clone())
                 .map(|v| WrappedTokenAllocation {
-                        allocated_percent: v.allocated_percent,
-                        initial_release: v.initial_release,
-                        vesting_start_time: WrappedTimestamp::from(v.vesting_start_time),
-                        vesting_end_time: WrappedTimestamp::from(v.vesting_end_time),
-                        vesting_interval: WrappedTimestamp::from(v.vesting_interval)
-                    })
+                    allocated_percent: v.allocated_percent,
+                    initial_release: v.initial_release,
+                    vesting_start_time: WrappedTimestamp::from(v.vesting_start_time),
+                    vesting_end_time: WrappedTimestamp::from(v.vesting_end_time),
+                    vesting_interval: WrappedTimestamp::from(v.vesting_interval)
+                })
                 .expect("Allocation not found")
             );
         }
