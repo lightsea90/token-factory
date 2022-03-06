@@ -14,6 +14,15 @@ impl TokenFactory {
         self.tokens.remove(&ft_contract);
     }
 
+    pub fn clear_metadata(&mut self, ft_contract: AccountId) {
+        assert!(env::state_exists(), "The contract is not initialized");
+        self.assert_admin();
+        let mut token = self.tokens.remove(&ft_contract).unwrap();
+        token.ft_metadata = None;
+        token.allocations.clear();
+        self.tokens.insert(&ft_contract, &token);
+    }
+
     fn assert_admin(&self) {
         assert!(
             self.admins.contains(&env::predecessor_account_id()),
