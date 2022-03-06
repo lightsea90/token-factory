@@ -224,11 +224,13 @@ impl TokenFactory {
         );
 
         let mut allocation_prefix = Vec::with_capacity(33);
-            // Adding unique prefix.
-            allocation_prefix.push(b'a');
-            // Adding the hash of the account_id (key of the outer map) to the prefix.
-            // This is needed to differentiate across accounts.
-            allocation_prefix.extend(env::sha256(ft_contract.as_bytes()));
+        // Adding unique prefix.
+        allocation_prefix.push(b'a');
+        // Adding the hash of the account_id (key of the outer map) to the prefix.
+        // This is needed to differentiate across accounts.
+        allocation_prefix.extend(
+            env::sha256(format!("{}@{}", ft_contract, env::block_timestamp()).as_bytes())
+        );
         
         let mut state_allocations = UnorderedMap::new(allocation_prefix);
 
