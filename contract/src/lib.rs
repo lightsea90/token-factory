@@ -513,7 +513,7 @@ impl TokenFactory {
         creator: AccountId
     ) {
         assert!(
-            env::signer_account_id() == creator,
+            env::predecessor_account_id() == creator,
             "Only creator is allowed to execute the function",
         );
 
