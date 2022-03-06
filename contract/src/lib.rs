@@ -232,10 +232,10 @@ impl TokenFactory {
             env::sha256(format!("{}@{}", ft_contract, env::block_timestamp()).as_bytes())
         );
         
-        let mut state_allocations = UnorderedMap::new(allocation_prefix);
+        let mut state_allocations: UnorderedMap<AccountId, TokenAllocation> = UnorderedMap::new(allocation_prefix);
 
         let mut treasury_exist = false;
-
+        
         for (account_id, alloc) in &allocations {
             let a = TokenAllocation {
                 allocated_percent: alloc.allocated_percent.into(),
@@ -251,6 +251,7 @@ impl TokenFactory {
             }
 
             self.assert_invalid_allocation(a.clone());
+            state_allocations.insert(account_id, &a);
 
             let total_allocs: u64 = state_allocations 
                 .values()
@@ -258,11 +259,19 @@ impl TokenFactory {
                 .sum();
 
             assert!(
-                total_allocs + a.allocated_percent <= MAX_SUPPLY_PERCENT,
+                total_allocs <= MAX_SUPPLY_PERCENT,
                 "Total allocations is greater than total supply"
             );
-            state_allocations.insert(account_id, &a);
         }
+
+        let total_allocs: u64 = state_allocations 
+            .values()
+            .map(|v: TokenAllocation| v.allocated_percent)
+            .sum();
+        assert!(
+            total_allocs == MAX_SUPPLY_PERCENT,
+            "Total allocations is not 100%"
+        );
 
         assert!(
             treasury_exist, 
@@ -489,14 +498,14 @@ impl TokenFactory {
         allocation: TokenAllocation 
     ) {
         //TODO: Allocation > 0
-            assert!(
-                allocation.allocated_percent >= allocation.initial_release + allocation.claimed,
-                "Allocation is smaller than the total claimable",
-            );
-            assert!(
-                allocation.vesting_interval <= allocation.vesting_end_time - allocation.vesting_start_time,
-                "Vesting interval is larger than vesting time",
-            );
+        assert!(
+            allocation.allocated_percent >= allocation.initial_release + allocation.claimed,
+            "Allocation is smaller than the total claimable",
+        );
+        assert!(
+            allocation.vesting_interval <= allocation.vesting_end_time - allocation.vesting_start_time,
+            "Vesting interval is larger than vesting time",
+        );
     }
 
     fn assert_creator(
