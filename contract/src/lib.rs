@@ -4,186 +4,27 @@ Functions:
  */
 
 // To conserve gas, efficient serialization is achieved through Borsh (http://borsh.io/)
+use crate::constants::*;
+use crate::types::*;
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::{UnorderedMap, UnorderedSet};
 use near_sdk::json_types::{Base64VecU8, WrappedBalance, WrappedDuration, WrappedTimestamp};
+use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::serde_json::{json, Value};
 use near_sdk::{env, near_bindgen, PanicOnDefault};
 use near_sdk::{AccountId, Balance, Duration, Gas, Timestamp};
 use near_sdk::{Promise, PromiseResult};
-use near_sdk::serde::{Serialize, Deserialize};
 use std::collections::HashMap;
 
 use crate::callbacks::ext_self;
 
 mod admins;
 mod callbacks;
+mod constants;
+pub mod types;
 mod views;
 
 near_sdk::setup_alloc!();
-
-const DEFAULT_GAS_FEE: Gas = 20_000_000_000_000;
-const TOKENHUB_TREASURY: &str = "treasury.tokenhub.testnet";
-const FT_WASM_CODE: &[u8] = include_bytes!("../../static/fungible_token.wasm");
-const DEPLOYER_WASM_CODE: &[u8] = include_bytes!("../../static/token_deployer.wasm");
-const MAX_SUPPLY_PERCENT: u64 = 10000; // Decimal: 2
-
-pub type TokenAllocationInput = HashMap<AccountId, WrappedTokenAllocation>;
-
-#[derive(BorshDeserialize, BorshSerialize, Clone, Deserialize, Serialize)]
-#[serde(crate = "near_sdk::serde")]
-pub struct WrappedTokenAllocation {
-    allocated_percent: u64,
-    initial_release: u64,
-    vesting_start_time: WrappedTimestamp,
-    vesting_end_time: WrappedTimestamp,
-    vesting_interval: WrappedDuration,
-}
-
-#[derive(BorshDeserialize, BorshSerialize, Clone, Deserialize, Serialize)]
-#[serde(crate = "near_sdk::serde")]
-pub struct TokenAllocation {
-    allocated_percent: u64, // Decimal: 2
-    initial_release: u64, 
-    vesting_start_time: Timestamp,
-    vesting_end_time: Timestamp,
-    vesting_interval: Duration,
-    claimed: u64, 
-}
-
-#[derive(BorshDeserialize, BorshSerialize, Clone, Deserialize, Serialize)]
-#[serde(crate = "near_sdk::serde")]
-pub struct FTMetadata {
-    total_supply: Balance,
-    token_name: String,
-    symbol: String,
-    icon: Option<String>,
-    reference: Option<String>,
-    reference_hash: Option<Base64VecU8>,
-    decimals: u8,
-}
-
-#[derive(BorshDeserialize, BorshSerialize, Clone, Deserialize, Serialize)]
-#[serde(crate = "near_sdk::serde")]
-pub struct WrappedFTMetadata {
-    total_supply: WrappedBalance,
-    token_name: String,
-    symbol: String,
-    icon: Option<String>,
-    reference: Option<String>,
-    reference_hash: Option<Base64VecU8>,
-    decimals: u8,
-}
-
-impl From<FTMetadata> for WrappedFTMetadata {
-   fn from(ft_metadata: FTMetadata) -> Self {
-       WrappedFTMetadata {
-        total_supply: WrappedBalance::from(ft_metadata.total_supply),
-        token_name: ft_metadata.token_name,
-        symbol: ft_metadata.symbol,
-        icon: ft_metadata.icon,
-        reference: ft_metadata.reference,
-        reference_hash: ft_metadata.reference_hash,
-        decimals: ft_metadata.decimals,
-       }
-   }
-}
-
-
-#[derive(BorshDeserialize, BorshSerialize)]
-pub struct State {
-    // token info
-    ft_contract: AccountId,
-    ft_metadata: Option<FTMetadata>,
-
-    // creator and deployer
-    ft_deployer: AccountId,
-    creator: AccountId,
-
-    // Multiple tokenomics
-    allocations: UnorderedMap<AccountId, TokenAllocation>, // => None after deploy token
-
-    // issuance states
-    ft_contract_deployed: u8,
-    deployer_contract_deployed: u8,
-    ft_issued: u8,
-    allocation_initialized: u8,
-}
-
-#[derive(BorshDeserialize, BorshSerialize, Clone, Deserialize, Serialize)]
-#[serde(crate = "near_sdk::serde")]
-pub struct WrappedState {
-    // token info
-    ft_contract: AccountId,
-    ft_metadata: Option<WrappedFTMetadata>,
-
-    // creator and deployer
-    ft_deployer: AccountId,
-    creator: AccountId,
-
-    // Multiple tokenomics
-    allocations: Vec<(AccountId, TokenAllocation)>,// => None after deploy token
-
-    // issuance states
-    ft_contract_deployed: u8,
-    deployer_contract_deployed: u8,
-    ft_issued: u8,
-    allocation_initialized: u8,
-}
-
-impl From<State> for WrappedState {
-   fn from(state: State) -> Self {
-       WrappedState {
-        ft_contract: state.ft_contract,
-        ft_metadata: match state.ft_metadata {
-            None => None,
-            Some(d) => Some(WrappedFTMetadata::from(d)),
-        },
-        // Some(WrappedFTMetadata::from(state.ft_metadata.expect("ft metadata not found!"))),
-
-        // creator and deployer
-        ft_deployer: state.ft_deployer,
-        creator: state.creator,
-
-        // Multiple tokenomics
-        allocations: state.allocations.to_vec(), // => None after deploy token
-
-        // issuance states
-        ft_contract_deployed: state.ft_contract_deployed,
-        deployer_contract_deployed: state.deployer_contract_deployed,
-        ft_issued: state.ft_issued,
-        allocation_initialized: state.allocation_initialized,
-       }
-   }
-}
-
-impl Default for State {
-    fn default() -> Self {
-        let default_string_value = String::from("__default_value__");
-        Self {
-            ft_contract: default_string_value.clone(),
-            ft_metadata: Some(FTMetadata {
-                total_supply: 0,
-                token_name: default_string_value.clone(),
-                symbol: default_string_value.clone(),
-                icon: Some(default_string_value.clone()),
-                reference: None,
-                reference_hash: None,
-                decimals: 0,
-            }),
-
-            ft_deployer: default_string_value.clone(),
-            creator: default_string_value.clone(),
-
-            allocations: UnorderedMap::new(b"tokennomics".to_vec()),
-
-            ft_contract_deployed: 0,
-            deployer_contract_deployed: 0,
-            ft_issued: 0,
-            allocation_initialized: 0,
-        }
-    }
-}
 
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
@@ -204,6 +45,16 @@ impl TokenFactory {
         };
     }
 
+    //TODO: Need to refactor proj structure
+    fn get_min_attached_balance(&self, token_state: &State) -> u128 {
+        ((FT_WASM_CODE.len()
+            + DEPLOYER_WASM_CODE.len()
+            + EXTRA_BYTES
+            + token_state.try_to_vec().unwrap().len() * 2) as Balance
+            * env::storage_byte_cost())
+        .into()
+    }
+
     #[payable]
     pub fn register(
         &mut self,
@@ -218,24 +69,20 @@ impl TokenFactory {
         allocations: TokenAllocationInput,
         decimals: u8,
     ) {
-        assert!(
-            env::attached_deposit() >= 4_000_000_000_000_000_000_000_000,
-            "Minimum deposit is 4 NEAR",
-        );
-
         let mut allocation_prefix = Vec::with_capacity(33);
         // Adding unique prefix.
         allocation_prefix.push(b'a');
         // Adding the hash of the account_id (key of the outer map) to the prefix.
         // This is needed to differentiate across accounts.
-        allocation_prefix.extend(
-            env::sha256(format!("{}@{}", ft_contract, env::block_timestamp()).as_bytes())
-        );
-        
-        let mut state_allocations: UnorderedMap<AccountId, TokenAllocation> = UnorderedMap::new(allocation_prefix);
+        allocation_prefix.extend(env::sha256(
+            format!("{}@{}", ft_contract, env::block_timestamp()).as_bytes(),
+        ));
+
+        let mut state_allocations: UnorderedMap<AccountId, TokenAllocation> =
+            UnorderedMap::new(allocation_prefix);
 
         let mut treasury_exist = false;
-        
+
         for (account_id, alloc) in &allocations {
             let a = TokenAllocation {
                 allocated_percent: alloc.allocated_percent.into(),
@@ -253,7 +100,7 @@ impl TokenFactory {
             self.assert_invalid_allocation(a.clone());
             state_allocations.insert(account_id, &a);
 
-            let total_allocs: u64 = state_allocations 
+            let total_allocs: u64 = state_allocations
                 .values()
                 .map(|v: TokenAllocation| v.allocated_percent)
                 .sum();
@@ -264,7 +111,7 @@ impl TokenFactory {
             );
         }
 
-        let total_allocs: u64 = state_allocations 
+        let total_allocs: u64 = state_allocations
             .values()
             .map(|v: TokenAllocation| v.allocated_percent)
             .sum();
@@ -273,11 +120,8 @@ impl TokenFactory {
             "Total allocations is not 100%"
         );
 
-        assert!(
-            treasury_exist, 
-            "Treasury allocation must exist!"
-        );
-        
+        assert!(treasury_exist, "Treasury allocation must exist!");
+
         let token = State {
             ft_contract: ft_contract.clone(),
             ft_metadata: Some(FTMetadata {
@@ -293,7 +137,7 @@ impl TokenFactory {
             ft_deployer: deployer_contract,
             creator: env::signer_account_id(),
 
-            allocations: state_allocations, 
+            allocations: state_allocations,
 
             ft_contract_deployed: 0,
             deployer_contract_deployed: 0,
@@ -301,11 +145,20 @@ impl TokenFactory {
             allocation_initialized: 0,
         };
 
+        let min_cost = self.get_min_attached_balance(&token);
         assert!(
-            token.ft_metadata
+            env::attached_deposit() >= min_cost,
+            "Minimum deposit is {} NEAR",
+            min_cost / NEAR_DECIMAL
+        );
+
+        assert!(
+            token
+                .ft_metadata
                 .as_ref()
                 .expect("Not found ft_metadata")
-                .total_supply > 0,
+                .total_supply
+                > 0,
             "total_supply must be greater than 0",
         );
         assert!(
@@ -406,16 +259,17 @@ impl TokenFactory {
         for k in token.allocations.keys() {
             allocations.insert(
                 k.clone(),
-                token.allocations
-                .get(&k.clone())
-                .map(|v| WrappedTokenAllocation {
-                    allocated_percent: v.allocated_percent,
-                    initial_release: v.initial_release,
-                    vesting_start_time: WrappedTimestamp::from(v.vesting_start_time),
-                    vesting_end_time: WrappedTimestamp::from(v.vesting_end_time),
-                    vesting_interval: WrappedTimestamp::from(v.vesting_interval)
-                })
-                .expect("Allocation not found")
+                token
+                    .allocations
+                    .get(&k.clone())
+                    .map(|v| WrappedTokenAllocation {
+                        allocated_percent: v.allocated_percent,
+                        initial_release: v.initial_release,
+                        vesting_start_time: WrappedTimestamp::from(v.vesting_start_time),
+                        vesting_end_time: WrappedTimestamp::from(v.vesting_end_time),
+                        vesting_interval: WrappedTimestamp::from(v.vesting_interval),
+                    })
+                    .expect("Allocation not found"),
             );
         }
 
@@ -448,71 +302,63 @@ impl TokenFactory {
 
     /// Utils
     //Get total allocations
-    pub fn assert_invalid_allocations(
-        &self,
-        ft_contract: AccountId
-    ) {
+    pub fn assert_invalid_allocations(&self, ft_contract: AccountId) {
         let token = self.tokens.get(&ft_contract).unwrap_or_default();
 
-        env::log(format!(
-            "total supply: {}, allocation length: {}",
-            token.ft_metadata.as_ref().expect("fadfa").total_supply,
-            token.allocations.values_as_vector().len(),
-        ).as_bytes());
+        env::log(
+            format!(
+                "total supply: {}, allocation length: {}",
+                token.ft_metadata.as_ref().expect("fadfa").total_supply,
+                token.allocations.values_as_vector().len(),
+            )
+            .as_bytes(),
+        );
 
         assert!(
             token
                 .ft_metadata
                 .as_ref()
                 .expect("Not found ft_metadata")
-                .total_supply > 0 
-            && token
-                .allocations
-                .values_as_vector()
-                .len() > 0,
+                .total_supply
+                > 0
+                && token.allocations.values_as_vector().len() > 0,
             "Token is not register"
         );
 
-        let total_allocations: u64 = token.allocations 
-                .values()
-                .map(|a| {
-                    self.assert_invalid_allocation(a.clone());
-                    a.allocated_percent
-                })
-                .sum();
-        
+        let total_allocations: u64 = token
+            .allocations
+            .values()
+            .map(|a| {
+                self.assert_invalid_allocation(a.clone());
+                a.allocated_percent
+            })
+            .sum();
+
         assert!(
             total_allocations == MAX_SUPPLY_PERCENT,
             "Total allocations is not equal to total supply"
         );
     }
 
-    fn assert_invalid_allocation(
-        &self, 
-        allocation: TokenAllocation 
-    ) {
+    fn assert_invalid_allocation(&self, allocation: TokenAllocation) {
         //TODO: Allocation > 0
         assert!(
             allocation.allocated_percent >= allocation.initial_release + allocation.claimed,
             "Allocation is smaller than the total claimable",
         );
         assert!(
-            allocation.vesting_interval <= allocation.vesting_end_time - allocation.vesting_start_time,
+            allocation.vesting_interval
+                <= allocation.vesting_end_time - allocation.vesting_start_time,
             "Vesting interval is larger than vesting time",
         );
     }
 
-    fn assert_creator(
-        &self,
-        creator: AccountId
-    ) {
+    fn assert_creator(&self, creator: AccountId) {
         assert!(
             env::predecessor_account_id() == creator,
             "Only creator is allowed to execute the function",
         );
-
     }
-
 }
 
 /*
