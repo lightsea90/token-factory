@@ -29,32 +29,17 @@ impl TokenFactory {
         return result;
     }
 
-    pub fn list_all_tokens(&self) -> Vec<WrappedState> {
+    pub fn list_token_contracts(&self, from_index: u64, limit: u64) -> Vec<WrappedState> {
         assert!(env::state_exists(), "The contract is not initialized");
 
         let token_list = self.tokens.keys_as_vector();
-        let mut result = vec![];
-
-        for token in token_list.iter() {
-            let state = self.tokens.get(&token).unwrap_or_default();
-            // let e = json!({state.ft_contract});
-            let e = WrappedState::from(state);
-            result.push(e);
-        }
-
-        return result;
-    }
-
-    pub fn list_all_token_contracts(self) -> Value {
-        assert!(env::state_exists(), "The contract is not initialized");
-
-        let token_list = self.tokens.keys_as_vector();
-        let mut result: Value = json!([]);
-
-        for token in token_list.iter() {
-            result.as_array_mut().unwrap().push(json!(token));
-        }
-        return result;
+        (from_index..std::cmp::min(from_index + limit, token_list.len()))
+            .map(|index| {
+                let key = token_list.get(index).unwrap();
+                let state = self.tokens.get(&key).unwrap();
+                WrappedState::from(state)
+            })
+            .collect()
     }
 
     pub fn list_token_states(&self, token_contracts: Vec<AccountId>) -> Vec<WrappedState> {
@@ -68,4 +53,3 @@ impl TokenFactory {
         return result;
     }
 }
-
