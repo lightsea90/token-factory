@@ -46,4 +46,32 @@ impl TokenFactory {
         self.assert_owner_id();
         self.admins.remove(&account_id);
     }
+
+    //Update user_tokens_map for existing tokens
+    pub fn migrate(&mut self) {
+        self.assert_owner_id();
+
+        //TODO: Check user_tokens_map initialized
+        // assert!(
+        //     self.user_tokens_map.is_some(),
+        //     "Already call migrate function before"
+        // );
+
+        for (token_id, state) in self.tokens.to_vec() {
+            //Add allocators to list
+            for (allocator, _) in state.allocations.to_vec() {
+                self.internal_add_user_token(allocator, token_id.clone());
+            }
+        }
+    }
+
+    pub fn internal_add_user_token(&mut self, account_id: AccountId, token_id: TokenId) {
+        let mut tokens = self
+            .user_tokens_map
+            .get(&account_id)
+            .unwrap_or(UnorderedSet::new(account_id.as_bytes()));
+
+        tokens.insert(&token_id);
+        self.user_tokens_map.insert(&account_id, &tokens);
+    }
 }
