@@ -45,16 +45,6 @@ impl TokenFactory {
         };
     }
 
-    //TODO: Need to refactor proj structure
-    fn get_min_attached_balance(&self, token_state: &State) -> u128 {
-        ((FT_WASM_CODE.len()
-            + DEPLOYER_WASM_CODE.len()
-            + EXTRA_BYTES
-            + token_state.try_to_vec().unwrap().len() * 2) as Balance
-            * env::storage_byte_cost())
-        .into()
-    }
-
     #[payable]
     pub fn register(
         &mut self,
@@ -301,6 +291,15 @@ impl TokenFactory {
     }
 
     /// Utils
+    fn get_min_attached_balance(&self, token_state: &State) -> u128 {
+        ((FT_WASM_CODE.len()
+            + DEPLOYER_WASM_CODE.len()
+            + EXTRA_BYTES
+            + token_state.try_to_vec().unwrap().len() * 2) as Balance
+            * env::storage_byte_cost())
+        .into()
+    }
+
     //Get total allocations
     pub fn assert_invalid_allocations(&self, ft_contract: AccountId) {
         let token = self.tokens.get(&ft_contract).unwrap_or_default();
