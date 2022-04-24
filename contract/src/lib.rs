@@ -184,6 +184,13 @@ impl Default for State {
         }
     }
 }
+//TODO: Delete this struct
+#[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
+pub struct OldTokenFactory {
+    owner_id: AccountId,
+    admins: UnorderedSet<AccountId>,
+    tokens: UnorderedMap<TokenId, State>,
+}
 
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]

@@ -51,7 +51,7 @@ impl TokenFactory {
     #[private]
     #[init(ignore_state)]
     pub fn migrate() -> Self {
-        let old_state: TokenFactory = env::state_read().expect("failed");
+        let old_state: OldTokenFactory = env::state_read().expect("failed");
         let new_state = Self {
             owner_id: old_state.owner_id,
             admins: old_state.admins,
@@ -79,6 +79,14 @@ impl TokenFactory {
             .unwrap_or(UnorderedSet::new(account_id.as_bytes()));
 
         tokens.insert(&token_id);
+        env::log(
+            format!(
+                "account_id: {:#?} tokens {:#?}",
+                account_id,
+                tokens.to_vec()
+            )
+            .as_bytes(),
+        );
         self.user_tokens_map.insert(&account_id, &tokens);
     }
 }
