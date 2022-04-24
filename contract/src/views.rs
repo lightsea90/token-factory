@@ -11,22 +11,31 @@ impl TokenFactory {
         WrappedState::from(token)
     }
 
-    pub fn list_my_tokens(&self, account_id: AccountId) -> Vec<WrappedState> {
+    // pub fn list_my_tokens(&self, account_id: AccountId) -> Vec<WrappedState> {
+    //     assert!(env::state_exists(), "The contract is not initialized");
+
+    //     let token_list = self.tokens.keys_as_vector();
+    //     let mut result = vec![];
+
+    //     for token in token_list.iter() {
+    //         let state = self.tokens.get(&token).unwrap_or_default();
+    //         if state.creator.eq(&account_id) {
+    //             // let e = json!({state.ft_contract});
+    //             let e = WrappedState::from(state);
+    //             result.push(e);
+    //         }
+    //     }
+
+    //     return result;
+    // }
+
+    pub fn list_my_tokens(&self, account_id: AccountId) -> Vec<TokenId> {
         assert!(env::state_exists(), "The contract is not initialized");
 
-        let token_list = self.tokens.keys_as_vector();
-        let mut result = vec![];
-
-        for token in token_list.iter() {
-            let state = self.tokens.get(&token).unwrap_or_default();
-            if state.creator.eq(&account_id) {
-                // let e = json!({state.ft_contract});
-                let e = WrappedState::from(state);
-                result.push(e);
-            }
+        if let Some(token_ids) = self.user_tokens_map.get(&account_id) {
+            return token_ids.to_vec();
         }
-
-        return result;
+        vec![]
     }
 
     pub fn list_token_contracts(&self, from_index: u64, limit: u64) -> Vec<WrappedState> {
