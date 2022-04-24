@@ -48,16 +48,22 @@ impl TokenFactory {
     }
 
     //Update user_tokens_map for existing tokens
-    pub fn migrate(&mut self) {
+    #[private]
+    #[init(ignore_state)]
+    pub fn migrate() -> Self {
+        let old_state: TokenFactory = env::state_read().expect("failed");
+        let new_state = Self {
+            owner_id: old_state.owner_id,
+            admins: old_state.admins,
+            tokens: old_state.tokens,
+            user_tokens_map: LookupMap::new(b"usertokens".to_vec()),
+        };
+
+        new_state
+    }
+
+    pub fn migrate_data(&mut self) {
         self.assert_owner_id();
-
-        //TODO: Check user_tokens_map initialized
-        // assert!(
-        //     self.user_tokens_map.is_some(),
-        //     "Already call migrate function before"
-        // );
-        self.user_tokens_map = LookupMap::new(b"usertokens".to_vec());
-
         for (token_id, state) in self.tokens.to_vec() {
             //Add allocators to list
             for (allocator, _) in state.allocations.to_vec() {

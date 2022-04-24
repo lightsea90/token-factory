@@ -8,7 +8,7 @@ use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::{LookupMap, UnorderedMap, UnorderedSet};
 use near_sdk::json_types::{Base64VecU8, WrappedBalance, WrappedDuration, WrappedTimestamp};
 use near_sdk::serde::{Deserialize, Serialize};
-use near_sdk::serde_json::{json, Value};
+use near_sdk::serde_json::json;
 use near_sdk::{env, near_bindgen, PanicOnDefault};
 use near_sdk::{AccountId, Balance, Duration, Gas, Timestamp};
 use near_sdk::{Promise, PromiseResult};
