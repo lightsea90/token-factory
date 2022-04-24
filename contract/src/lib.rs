@@ -136,6 +136,7 @@ impl TokenFactory {
         };
 
         let min_cost = self.get_min_attached_balance(&token);
+        env::log(format!("Cost: {:#?}", min_cost).as_bytes());
         assert!(
             env::attached_deposit() >= min_cost,
             "Minimum deposit is {} NEAR",
