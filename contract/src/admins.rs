@@ -56,6 +56,7 @@ impl TokenFactory {
         //     self.user_tokens_map.is_some(),
         //     "Already call migrate function before"
         // );
+        self.user_tokens_map = LookupMap::new(b"usertokens".to_vec());
 
         for (token_id, state) in self.tokens.to_vec() {
             //Add allocators to list
