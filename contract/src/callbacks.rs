@@ -75,8 +75,9 @@ impl TokenFactory {
                     "State allocation_initialized is invalid",
                 );
                 token.allocation_initialized = 1;
-                token.ft_metadata = None;
-                token.allocations.clear();
+                // TODO: this is temporary. It needs to be uncommented at some point
+                // token.ft_metadata = None;
+                // token.allocations.clear();
                 self.tokens.insert(&ft_contract, &token);
                 true
             }
