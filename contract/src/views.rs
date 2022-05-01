@@ -14,7 +14,7 @@ impl TokenFactory {
     pub fn list_my_tokens(&self, account_id: AccountId) -> Vec<TokenId> {
         assert!(env::state_exists(), "The contract is not initialized");
 
-        if let Some(token_ids) = self.user_tokens_map.get(&account_id) {
+        if let Some(token_ids) = self.user_token_map.get(&account_id) {
             return token_ids.to_vec();
         }
         vec![]

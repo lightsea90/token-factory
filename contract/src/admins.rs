@@ -56,27 +56,43 @@ impl TokenFactory {
             owner_id: old_state.owner_id,
             admins: old_state.admins,
             tokens: old_state.tokens,
-            user_tokens_map: LookupMap::new(b"usertokens".to_vec()),
+            user_token_map: LookupMap::new(b"tokenmap".to_vec()),
         };
 
         new_state
     }
 
-    pub fn migrate_data(&mut self) {
-        self.assert_owner_id();
-        for (token_id, state) in self.tokens.to_vec() {
-            //Add allocators to list
+    pub fn migrate_data(&mut self, from_index: u64, limit: u64) {
+        self.assert_admin();
+        let contract_ids = self.tokens.keys_as_vector();
+        for index in from_index..std::cmp::min(from_index + limit, contract_ids.len()) {
+            let contract_id = contract_ids.get(index).unwrap();
+            let state = self.tokens.get(&contract_id).unwrap();
             for (allocator, _) in state.allocations.to_vec() {
-                self.internal_add_user_token(allocator, token_id.clone());
+                let mut tokens = self
+                    .user_token_map
+                    .get(&allocator)
+                    .unwrap_or(UnorderedSet::new(
+                        format!("{}#{}", allocator, env::block_timestamp()).as_bytes(),
+                    ));
+
+                tokens.insert(&contract_id);
+                env::log(
+                    format!("account_id: {:#?} tokens {:#?}", allocator, tokens.to_vec())
+                        .as_bytes(),
+                );
+                self.user_token_map.insert(&allocator, &tokens);
             }
         }
     }
 
     pub fn internal_add_user_token(&mut self, account_id: AccountId, token_id: TokenId) {
         let mut tokens = self
-            .user_tokens_map
+            .user_token_map
             .get(&account_id)
-            .unwrap_or(UnorderedSet::new(account_id.as_bytes()));
+            .unwrap_or(UnorderedSet::new(
+                format!("{}#{}", account_id, env::block_timestamp()).as_bytes(),
+            ));
 
         tokens.insert(&token_id);
         env::log(
@@ -87,6 +103,6 @@ impl TokenFactory {
             )
             .as_bytes(),
         );
-        self.user_tokens_map.insert(&account_id, &tokens);
+        self.user_token_map.insert(&account_id, &tokens);
     }
 }

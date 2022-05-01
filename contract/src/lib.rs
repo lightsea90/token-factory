@@ -190,6 +190,7 @@ pub struct OldTokenFactory {
     owner_id: AccountId,
     admins: UnorderedSet<AccountId>,
     tokens: UnorderedMap<TokenId, State>,
+    user_token_map: LookupMap<AccountId, UnorderedSet<TokenId>>,
 }
 
 #[near_bindgen]
@@ -198,7 +199,7 @@ pub struct TokenFactory {
     owner_id: AccountId,
     admins: UnorderedSet<AccountId>,
     tokens: UnorderedMap<TokenId, State>,
-    user_tokens_map: LookupMap<AccountId, UnorderedSet<TokenId>>,
+    user_token_map: LookupMap<AccountId, UnorderedSet<TokenId>>,
 }
 
 #[near_bindgen]
@@ -209,7 +210,7 @@ impl TokenFactory {
             owner_id: String::from(owner_id),
             admins: UnorderedSet::new(b"admins".to_vec()),
             tokens: UnorderedMap::new(b"tokenspec".to_vec()),
-            user_tokens_map: LookupMap::new(b"usertokens".to_vec()),
+            user_token_map: LookupMap::new(b"tokenmap".to_vec()),
         };
     }
 
