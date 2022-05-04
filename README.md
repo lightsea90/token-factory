@@ -22,16 +22,16 @@ $ near call tokenhub.testnet --accountId harrynguyen005.testnet register '{
         "treasury.tokenhub.testnet": {
             "allocated_percent": 800,
             "initial_release": 0,
-            "vesting_start_time": "'$((current+5*60))000000000'",
-            "vesting_end_time": "'$((current+15*60))000000000'",
-            "vesting_interval": "'$((5*60))000000000'"
+            "vesting_start_time": "'$((current+5*60))000000'",
+            "vesting_end_time": "'$((current+15*60))000000'",
+            "vesting_interval": "'$((5*60))00000'"
         },
-        "harrynguyen005.testnet": {
+        "trietnguyen.testnet": {
             "allocated_percent": 9200,
             "initial_release": 1500,
-            "vesting_start_time": "'$((current+5*60))000000000'",
-            "vesting_end_time": "'$((current+15*60))000000000'",
-            "vesting_interval": "'$((5*60))000000000'"
+            "vesting_start_time": "'$((current+5*60))00000'",
+            "vesting_end_time": "'$((current+15*60))00000'",
+            "vesting_interval": "'$((5*60))00000'"
         }
     }
 }' --deposit 8

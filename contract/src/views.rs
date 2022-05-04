@@ -11,7 +11,7 @@ impl TokenFactory {
         WrappedState::from(token)
     }
 
-    pub fn list_my_tokens(&self, account_id: AccountId) -> Vec<TokenId> {
+    pub fn list_tokens_by_account_id(&self, account_id: AccountId) -> Vec<TokenId> {
         assert!(env::state_exists(), "The contract is not initialized");
 
         if let Some(token_ids) = self.user_token_map.get(&account_id) {
@@ -41,6 +41,53 @@ impl TokenFactory {
 
             result.push(WrappedState::from(state));
         }
+        return result;
+    }
+
+    //NOTE: Use for the old version
+    pub fn list_all_tokens(&self) -> Vec<WrappedState> {
+        assert!(env::state_exists(), "The contract is not initialized");
+
+        let token_list = self.tokens.keys_as_vector();
+        let mut result = vec![];
+
+        for token in token_list.iter() {
+            let state = self.tokens.get(&token).unwrap_or_default();
+            // let e = json!({state.ft_contract});
+            let e = WrappedState::from(state);
+            result.push(e);
+        }
+
+        return result;
+    }
+
+    pub fn list_all_token_contracts(self) -> Value {
+        assert!(env::state_exists(), "The contract is not initialized");
+
+        let token_list = self.tokens.keys_as_vector();
+        let mut result: Value = json!([]);
+
+        for token in token_list.iter() {
+            result.as_array_mut().unwrap().push(json!(token));
+        }
+        return result;
+    }
+
+    pub fn list_my_tokens(&self, account_id: AccountId) -> Vec<WrappedState> {
+        assert!(env::state_exists(), "The contract is not initialized");
+
+        let token_list = self.tokens.keys_as_vector();
+        let mut result = vec![];
+
+        for token in token_list.iter() {
+            let state = self.tokens.get(&token).unwrap_or_default();
+            if state.creator.eq(&account_id) {
+                // let e = json!({state.ft_contract});
+                let e = WrappedState::from(state);
+                result.push(e);
+            }
+        }
+
         return result;
     }
 }

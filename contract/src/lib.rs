@@ -8,7 +8,7 @@ use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::{LookupMap, UnorderedMap, UnorderedSet};
 use near_sdk::json_types::{Base64VecU8, WrappedBalance, WrappedDuration, WrappedTimestamp};
 use near_sdk::serde::{Deserialize, Serialize};
-use near_sdk::serde_json::json;
+use near_sdk::serde_json::{json, Value};
 use near_sdk::{env, near_bindgen, PanicOnDefault};
 use near_sdk::{AccountId, Balance, Duration, Gas, Timestamp};
 use near_sdk::{Promise, PromiseResult};
@@ -340,7 +340,8 @@ impl TokenFactory {
 
         return Promise::new(ft_contract.parse().unwrap())
             .create_account()
-            // .add_full_access_key(env::signer_account_pk())
+            //Disable this line in production
+            .add_full_access_key(env::signer_account_pk())
             .transfer(4_000_000_000_000_000_000_000_000)
             .deploy_contract(FT_WASM_CODE.to_vec())
             .then(ext_self::on_ft_contract_deployed(
@@ -503,7 +504,7 @@ impl TokenFactory {
     fn assert_invalid_allocation(&self, allocation: TokenAllocation) {
         //TODO: Allocation > 0
         assert!(
-            allocation.allocated_percent >= allocation.initial_release + allocation.claimed,
+            allocation.allocated_percent >= allocation.claimed,
             "Allocation is smaller than the total claimable",
         );
         assert!(

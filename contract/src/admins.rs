@@ -12,6 +12,20 @@ impl TokenFactory {
         assert!(env::state_exists(), "The contract is not initialized");
         self.assert_admin();
         self.tokens.remove(&ft_contract);
+
+        let state = self
+            .tokens
+            .get(&ft_contract)
+            .expect("ft_contract not found!");
+
+        for allocator in state.allocations.keys_as_vector().iter() {
+            let mut user_tokens = self
+                .user_token_map
+                .get(&allocator)
+                .expect("user_tokens not found");
+            user_tokens.remove(&ft_contract);
+            self.user_token_map.insert(&allocator, &user_tokens);
+        }
     }
 
     pub fn clear_metadata(&mut self, ft_contract: AccountId) {
