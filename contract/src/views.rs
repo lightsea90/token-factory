@@ -23,13 +23,27 @@ impl TokenFactory {
     pub fn list_token_contracts(&self, from_index: u64, limit: u64) -> Vec<WrappedState> {
         assert!(env::state_exists(), "The contract is not initialized");
 
-        let token_list = self.tokens.keys_as_vector();
-        (from_index..std::cmp::min(from_index + limit, token_list.len()))
+        let keys = self.tokens.keys_as_vector();
+
+        let from = if keys.len() > (limit + from_index) {
+            keys.len() - limit - from_index
+        } else {
+            0
+        };
+
+        let to = if keys.len() > from_index {
+            keys.len() - from_index
+        } else {
+            0
+        };
+
+        (from..to)
             .map(|index| {
-                let key = token_list.get(index).unwrap();
+                let key = keys.get(index).unwrap();
                 let state = self.tokens.get(&key).unwrap();
                 WrappedState::from(state)
             })
+            .rev()
             .collect()
     }
 
